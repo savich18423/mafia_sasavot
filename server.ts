@@ -25,6 +25,17 @@ async function startServer() {
   console.log(`AIS_PREVIEW: ${process.env.AIS_PREVIEW}`);
   console.log(`Has dist folder: ${hasDist}`);
 
+  // Explicitly set MIME types for common assets in dev mode
+  if (isDev) {
+    app.use((req, res, next) => {
+      const ext = path.extname(req.path);
+      if (['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
+        res.setHeader('Content-Type', 'application/javascript');
+      }
+      next();
+    });
+  }
+
   // Game state management
   const rooms = new Map();
 
