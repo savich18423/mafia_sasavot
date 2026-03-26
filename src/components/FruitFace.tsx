@@ -110,7 +110,7 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
         const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
         const mouthIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409];
 
-        const drawMaskedRegion = (indices: number[], scale = 1.8, feather = 15) => {
+        const drawMaskedRegion = (indices: number[], scale = 2.0, feather = 8, tintColor?: string) => {
           ctx.save();
           
           // Calculate center of the region
@@ -135,41 +135,50 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
             ctx.closePath();
           };
 
-          // Draw a soft shadow/glow behind the hole for depth
+          // 1. Draw a deep inner shadow/hole effect (The "Cut-out" look)
           ctx.save();
-          createPath(scale * 1.05);
-          ctx.shadowBlur = feather;
-          ctx.shadowColor = 'rgba(0,0,0,0.8)';
-          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          createPath(scale * 1.15);
+          ctx.shadowBlur = feather * 2;
+          ctx.shadowColor = 'rgba(0,0,0,1)';
+          ctx.fillStyle = 'rgba(0,0,0,0.8)';
           ctx.fill();
           ctx.restore();
 
-          // Clipping for the video content
+          // 2. Clipping for the video content
           ctx.save();
           createPath(scale);
           ctx.clip();
           
-          // Draw the video frame, scaled to match the path
+          // Draw the video frame
           ctx.translate(cx, cy);
           ctx.scale(scale, scale);
           ctx.translate(-cx, -cy);
           ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+          
+          // 3. Add a subtle color tint to match the fruit (Integration)
+          if (tintColor) {
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.fillStyle = tintColor;
+            ctx.globalAlpha = 0.2;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1.0;
+            ctx.globalCompositeOperation = 'source-over';
+          }
           ctx.restore();
 
-          // Add a feathered edge overlay to blend video with fruit
+          // 4. Smooth blending edge (The "Skin" of the fruit)
           ctx.save();
           createPath(scale);
           ctx.strokeStyle = FRUIT_COLORS[fruitType] || '#000';
-          ctx.lineWidth = feather;
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.filter = `blur(${feather/2}px)`;
+          ctx.lineWidth = feather * 1.5;
+          ctx.filter = `blur(${feather}px)`;
           ctx.stroke();
           ctx.restore();
 
-          // Final sharp inner border for definition
+          // 5. Sharp inner border for definition
           ctx.save();
           createPath(scale);
-          ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+          ctx.strokeStyle = 'rgba(0,0,0,0.5)';
           ctx.lineWidth = 2;
           ctx.stroke();
           ctx.restore();
@@ -177,11 +186,11 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
           ctx.restore();
         };
 
-        // Draw eyes and mouth with significant scaling for the iconic look
-        // We use slightly different scales for eyes and mouth to balance the look
-        drawMaskedRegion(leftEyeIndices, 1.9, 12);
-        drawMaskedRegion(rightEyeIndices, 1.9, 12);
-        drawMaskedRegion(mouthIndices, 1.7, 15);
+        // Draw eyes and mouth with much larger scaling for the iconic look
+        const tint = FRUIT_COLORS[fruitType];
+        drawMaskedRegion(leftEyeIndices, 2.2, 6, tint);
+        drawMaskedRegion(rightEyeIndices, 2.2, 6, tint);
+        drawMaskedRegion(mouthIndices, 2.0, 10, tint);
 
       } else {
         // If no face, show fruit in center or dimmed video
