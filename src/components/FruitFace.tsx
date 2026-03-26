@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FaceMesh } from '@mediapipe/face_mesh';
 import { Camera } from '@mediapipe/camera_utils';
+import { Shield, Target, Search, Skull, Heart, User, CheckCircle2, XCircle } from 'lucide-react';
 
 interface FruitFaceProps {
   stream: MediaStream | null;
   fruitType: string;
   isLocal?: boolean;
   playerName: string;
+  status?: 'protected' | 'targeted' | 'investigated_mafia' | 'investigated_citizen' | null;
 }
 
 const FRUIT_IMAGES: Record<string, string> = {
@@ -35,7 +37,13 @@ const FRUIT_COLORS: Record<string, string> = {
   cherry: '#D2042D',
 };
 
-export const FruitFace: React.FC<FruitFaceProps> = ({ stream, fruitType, isLocal, playerName }) => {
+export const FruitFace: React.FC<FruitFaceProps> = ({ 
+  stream, 
+  fruitType, 
+  isLocal, 
+  playerName,
+  status 
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -230,6 +238,32 @@ export const FruitFace: React.FC<FruitFaceProps> = ({ stream, fruitType, isLocal
       <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 rounded text-white text-xs font-medium">
         {playerName} {isLocal && "(You)"}
       </div>
+
+      {/* Status Icons Overlay */}
+      {status && (
+        <div className="absolute top-4 right-4 flex flex-col gap-2">
+          {status === 'protected' && (
+            <div className="p-2 bg-green-600 rounded-full shadow-lg shadow-green-900/40 animate-pulse">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+          )}
+          {status === 'targeted' && (
+            <div className="p-2 bg-red-600 rounded-full shadow-lg shadow-red-900/40 animate-bounce">
+              <Target className="w-5 h-5 text-white" />
+            </div>
+          )}
+          {status === 'investigated_mafia' && (
+            <div className="p-2 bg-orange-600 rounded-full shadow-lg shadow-orange-900/40">
+              <Skull className="w-5 h-5 text-white" />
+            </div>
+          )}
+          {status === 'investigated_citizen' && (
+            <div className="p-2 bg-blue-600 rounded-full shadow-lg shadow-blue-900/40">
+              <User className="w-5 h-5 text-white" />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
