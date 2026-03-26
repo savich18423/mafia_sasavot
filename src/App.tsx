@@ -820,14 +820,23 @@ export default function App() {
             </div>
 
             {room.status === 'lobby' && room.host === peerRef.current?.id && (
-              <button
-                onClick={startGame}
-                disabled={room.players.length < 3}
-                className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-orange-900/20 active:scale-95 disabled:opacity-50 relative z-10"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                <span className="uppercase tracking-[0.2em] text-xs">Start Session</span>
-              </button>
+              <div className="space-y-2 relative z-10">
+                <button
+                  onClick={startGame}
+                  disabled={room.players.length < 3}
+                  className="w-full bg-orange-600 hover:bg-orange-500 text-white font-black py-5 rounded-2xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-orange-900/20 active:scale-95 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span className="uppercase tracking-[0.2em] text-xs">
+                    {room.players.length < 3 ? `Need ${3 - room.players.length} more` : 'Start Session'}
+                  </span>
+                </button>
+                {room.players.length < 3 && (
+                  <p className="text-[9px] text-center font-black uppercase tracking-widest text-zinc-600">
+                    Minimum 3 players required to start
+                  </p>
+                )}
+              </div>
             )}
 
             {room.status === 'playing' && room.host === peerRef.current?.id && (
