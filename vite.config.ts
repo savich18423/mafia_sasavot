@@ -7,9 +7,10 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   // Set base path to repository name for GitHub Pages, otherwise root
   const isGitHubPages = process.env.GITHUB_ACTIONS === 'true';
+  const base = isGitHubPages ? '/mafia_sasavot/' : '/';
   
   return {
-    base: isGitHubPages ? '/mafia_sasavot/' : '/',
+    base,
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
