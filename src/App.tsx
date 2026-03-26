@@ -103,7 +103,9 @@ export default function App() {
     const stream = await startMedia();
     if (!stream) return setIsConnecting(false);
 
-    const peer = new Peer();
+    // Generate a short, readable ID
+    const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const peer = new Peer(shortId);
     peerRef.current = peer;
 
     peer.on('open', (id) => {
@@ -130,11 +132,21 @@ export default function App() {
         setPeerStreams(prev => ({ ...prev, [call.peer]: remoteStream }));
       });
     });
+
+    peer.on('error', (err) => {
+      if (err.type === 'unavailable-id') {
+        // Retry with a different ID if taken
+        createRoom();
+      } else {
+        setError('Peer connection error: ' + err.type);
+        setIsConnecting(false);
+      }
+    });
   };
 
   const joinRoom = async () => {
     const trimmedName = playerName.trim();
-    const trimmedRoomId = roomId.trim();
+    const trimmedRoomId = roomId.trim().toUpperCase(); // Ensure uppercase for matching
     if (!trimmedName || !trimmedRoomId) return setError('Enter name and room ID');
     setIsConnecting(true);
     const stream = await startMedia();
@@ -174,7 +186,11 @@ export default function App() {
     });
 
     peer.on('error', (err) => {
-      setError('Peer connection error: ' + err.type);
+      if (err.type === 'peer-unavailable') {
+        setError('Room not found. Make sure the host is online.');
+      } else {
+        setError('Peer connection error: ' + err.type);
+      }
       setIsConnecting(false);
     });
   };
@@ -328,7 +344,7 @@ export default function App() {
             className="px-4 py-2 bg-orange-600 hover:bg-orange-500 transition-all rounded-xl border border-orange-400/30 flex items-center gap-2 group shadow-lg shadow-orange-900/20"
           >
             <span className="text-[10px] font-black tracking-widest uppercase text-white/80">Room Code:</span>
-            <span className="text-sm font-mono font-black text-white">{room.id.substring(0, 8).toUpperCase()}</span>
+            <span className="text-sm font-mono font-black text-white">{room.id}</span>
             {copied ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4 text-white/60 group-hover:text-white" />}
           </button>
           <button 
