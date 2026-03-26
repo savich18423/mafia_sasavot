@@ -3,6 +3,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import fs from "fs";
 
 async function startServer() {
   const app = express();
@@ -15,6 +16,14 @@ async function startServer() {
   });
 
   const PORT = 3000;
+  const distPath = path.join(process.cwd(), 'dist');
+  const hasDist = fs.existsSync(distPath);
+  const isDev = process.env.NODE_ENV !== "production" || process.env.AIS_PREVIEW === "true" || !hasDist;
+
+  console.log(`Starting server in ${isDev ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
+  console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`AIS_PREVIEW: ${process.env.AIS_PREVIEW}`);
+  console.log(`Has dist folder: ${hasDist}`);
 
   // Game state management
   const rooms = new Map();
@@ -126,12 +135,50 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production" || process.env.AIS_PREVIEW === "true") {
+  if (isDev) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
+      root: process.cwd(),
     });
+    
+    // Use vite's connect instance as middleware
     app.use(vite.middlewares);
+    
+    // In dev mode, Vite handles the index.html transformation
+    app.get('*', async (req, res, next) => {
+      const url = req.originalUrl;
+      try {
+        // Only handle HTML requests or fallbacks
+        if (url.includes('.') && !url.endsWith('.html')) {
+          return next();
+        }
+        
+        let template = `
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              <link rel="preconnect" href="https://fonts.googleapis.com">
+              <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+              <title>Fruit Mafia AR</title>
+            </head>
+            <body>
+              <div id="root"></div>
+              <script type="module" src="/src/main.tsx"></script>
+            </body>
+          </html>
+        `;
+        
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
