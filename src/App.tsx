@@ -310,6 +310,7 @@ export default function App() {
       nightActions: { mafiaTarget: null, doctorTarget: null, detectiveTarget: null },
       logs: [{ message: 'The game has started! It is now night.', type: 'system', timestamp: Date.now() }, ...room.logs]
     };
+    addLog(`Game started with ${room.players.length} players.`, 'system');
     broadcast(updatedRoom);
   };
 
@@ -319,12 +320,19 @@ export default function App() {
     if (!me || !me.isAlive) return;
 
     const updatedActions = { ...room.nightActions };
-    if (me.role === 'mafia') updatedActions.mafiaTarget = targetId;
-    if (me.role === 'doctor') updatedActions.doctorTarget = targetId;
+    if (me.role === 'mafia') {
+      updatedActions.mafiaTarget = targetId;
+      addLog('Mafia has chosen a target.', 'system');
+    }
+    if (me.role === 'doctor') {
+      updatedActions.doctorTarget = targetId;
+      addLog('Doctor has chosen someone to protect.', 'system');
+    }
     if (me.role === 'detective') {
       updatedActions.detectiveTarget = targetId;
       const target = room.players.find(p => p.id === targetId);
       toast.info(`${target?.name} is ${target?.role === 'mafia' ? 'MAFIA' : 'NOT MAFIA'}`);
+      addLog('Detective has investigated a player.', 'system');
     }
 
     const updatedRoom = { ...room, nightActions: updatedActions };
@@ -925,11 +933,11 @@ export default function App() {
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar flex flex-col">
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
               {activeTab === 'chat' ? (
-                <div className="flex-1 space-y-4">
+                <div className="space-y-4">
                   {room.chat.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2 opacity-50">
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2 opacity-50 py-20">
                       <MessageSquare className="w-8 h-8" />
                       <p className="text-[10px] font-black uppercase tracking-widest">No messages yet</p>
                     </div>
@@ -960,9 +968,9 @@ export default function App() {
                   <div ref={chatEndRef} />
                 </div>
               ) : (
-                <div className="flex-1 space-y-3">
+                <div className="space-y-3">
                   {room.logs.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2 opacity-50">
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2 opacity-50 py-20">
                       <Info className="w-8 h-8" />
                       <p className="text-[10px] font-black uppercase tracking-widest">No logs yet</p>
                     </div>
