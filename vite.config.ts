@@ -5,7 +5,11 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  // Set base path to repository name for GitHub Pages, otherwise root
+  const isGitHubPages = process.env.NODE_ENV === 'production' && !process.env.AIS_PREVIEW;
+  
   return {
+    base: isGitHubPages ? '/mafia_sasavot/' : '/',
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
