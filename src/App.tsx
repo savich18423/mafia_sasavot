@@ -56,7 +56,7 @@ interface Room {
   winner: 'mafia' | 'citizens' | null;
 }
 
-const FRUITS = ['orange', 'apple', 'banana', 'strawberry', 'pear', 'grape', 'lemon', 'watermelon', 'pineapple', 'cherry'];
+const FRUITS = ['watermelon', 'apple', 'orange', 'grapefruit', 'pomelo', 'lemon', 'lime', 'guava', 'apricot', 'tangerine'];
 
 // --- Main Component ---
 
@@ -192,11 +192,13 @@ export default function App() {
     const peer = new Peer(shortId);
     peerRef.current = peer;
 
+    const randomFruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+
     peer.on('open', (id) => {
       const initialRoom: Room = {
         id: id,
         host: id,
-        players: [{ id, name: trimmedName, role: null, isAlive: true, fruit: 'orange' }],
+        players: [{ id, name: trimmedName, role: null, isAlive: true, fruit: randomFruit }],
         maxPlayers: 10,
         status: 'lobby',
         phase: 'waiting',
