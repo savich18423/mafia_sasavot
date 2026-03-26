@@ -12,29 +12,29 @@ interface FruitFaceProps {
 }
 
 const FRUIT_IMAGES: Record<string, string> = {
-  orange: 'https://cdn-icons-png.flaticon.com/512/1728/1728765.png',
-  apple: 'https://cdn-icons-png.flaticon.com/512/415/415682.png',
-  banana: 'https://cdn-icons-png.flaticon.com/512/2909/2909808.png',
-  strawberry: 'https://cdn-icons-png.flaticon.com/512/590/590685.png',
-  pear: 'https://cdn-icons-png.flaticon.com/512/3137/3137044.png',
-  grape: 'https://cdn-icons-png.flaticon.com/512/1147/1147832.png',
-  lemon: 'https://cdn-icons-png.flaticon.com/512/744/744465.png',
-  watermelon: 'https://cdn-icons-png.flaticon.com/512/2153/2153788.png',
-  pineapple: 'https://cdn-icons-png.flaticon.com/512/1147/1147805.png',
-  cherry: 'https://cdn-icons-png.flaticon.com/512/1147/1147833.png',
+  watermelon: 'https://i.ibb.co/zVkVtrRv/png-clipart-watermelon-watermelon-thumbnail-removebg-preview.png',
+  apple: 'https://pngicon.ru/file/uploads/apple.png',
+  orange: 'https://pngicon.ru/file/uploads/2_55.png',
+  grapefruit: 'https://imgpng.ru/d/grapefruit_PNG15258.png',
+  pomelo: 'https://static.vecteezy.com/system/resources/previews/060/361/467/non_2x/fresh-green-pomelo-fruit-on-a-clean-transparent-background-ready-for-culinary-use-or-as-part-of-a-healthy-diet-fresh-green-pomelo-on-a-transparent-background-free-png.png',
+  lemon: 'https://png.pngtree.com/png-clipart/20240220/original/pngtree-lemon-on-white-background-fruit-photo-png-image_14363893.png',
+  lime: 'https://imgpng.ru/d/lime_PNG52.png',
+  guava: 'https://png.klev.club/uploads/posts/2024-05/thumbs/png-klev-club-4ae4-p-guava-png-26.png',
+  apricot: 'https://pngicon.ru/file/uploads/abrikos.png',
+  tangerine: 'https://png.pngtree.com/png-clipart/20250212/original/pngtree-tangerine-fruit-png-image_20422728.png',
 };
 
 const FRUIT_COLORS: Record<string, string> = {
-  orange: '#FF8C00',
-  apple: '#FF0800',
-  banana: '#FFE135',
-  strawberry: '#FC5A8D',
-  pear: '#D1E231',
-  grape: '#6F2DA8',
-  lemon: '#FFF700',
   watermelon: '#FC6C85',
-  pineapple: '#FFD700',
-  cherry: '#D2042D',
+  apple: '#FF0800',
+  orange: '#FF8C00',
+  grapefruit: '#FF7F50',
+  pomelo: '#D1E231',
+  lemon: '#FFF700',
+  lime: '#32CD32',
+  guava: '#98FB98',
+  apricot: '#FBCEB1',
+  tangerine: '#FF8C00',
 };
 
 export const FruitFace: React.FC<FruitFaceProps> = ({ 
@@ -72,16 +72,6 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
     const fruitImg = new Image();
     fruitImg.src = FRUIT_IMAGES[fruitType] || FRUIT_IMAGES.orange;
 
-    const drawLandmarkRegion = (ctx: CanvasRenderingContext2D, landmarks: any[], indices: number[]) => {
-      ctx.beginPath();
-      indices.forEach((idx, i) => {
-        const p = landmarks[idx];
-        if (i === 0) ctx.moveTo(p.x * canvas.width, p.y * canvas.height);
-        else ctx.lineTo(p.x * canvas.width, p.y * canvas.height);
-      });
-      ctx.closePath();
-    };
-
     faceMesh.onResults((results) => {
       if (!ctx || !canvas) return;
 
@@ -118,10 +108,9 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
         // 3. Cut out eyes and mouth (draw original video in these regions)
         const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
         const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
-        // More comprehensive mouth indices for "Annoying Orange" look
         const mouthIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409];
 
-        const drawMaskedRegion = (indices: number[], scale = 1.5) => {
+        const drawMaskedRegion = (indices: number[], scale = 1.8, feather = 15) => {
           ctx.save();
           
           // Calculate center of the region
@@ -133,56 +122,66 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
           cx /= indices.length;
           cy /= indices.length;
 
-          // Create the path for clipping
-          ctx.beginPath();
-          indices.forEach((idx, i) => {
-            const p = landmarks[idx];
-            const px = cx + (p.x * canvas.width - cx) * scale;
-            const py = cy + (p.y * canvas.height - cy) * scale;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          });
-          ctx.closePath();
-          
-          // Clipping
+          // Create the path for clipping with scaling
+          const createPath = (s: number) => {
+            ctx.beginPath();
+            indices.forEach((idx, i) => {
+              const p = landmarks[idx];
+              const px = cx + (p.x * canvas.width - cx) * s;
+              const py = cy + (p.y * canvas.height - cy) * s;
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            });
+            ctx.closePath();
+          };
+
+          // Draw a soft shadow/glow behind the hole for depth
           ctx.save();
+          createPath(scale * 1.05);
+          ctx.shadowBlur = feather;
+          ctx.shadowColor = 'rgba(0,0,0,0.8)';
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fill();
+          ctx.restore();
+
+          // Clipping for the video content
+          ctx.save();
+          createPath(scale);
           ctx.clip();
           
-          // Draw the video frame, but also scale it around the center to match the path scaling
+          // Draw the video frame, scaled to match the path
           ctx.translate(cx, cy);
           ctx.scale(scale, scale);
           ctx.translate(-cx, -cy);
           ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
           ctx.restore();
 
-          // Add a dark inner glow/border to simulate depth
-          ctx.beginPath();
-          indices.forEach((idx, i) => {
-            const p = landmarks[idx];
-            const px = cx + (p.x * canvas.width - cx) * scale;
-            const py = cy + (p.y * canvas.height - cy) * scale;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          });
-          ctx.closePath();
-          
-          // Create a gradient for the "hole" edge
-          ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-          ctx.lineWidth = 6;
+          // Add a feathered edge overlay to blend video with fruit
+          ctx.save();
+          createPath(scale);
+          ctx.strokeStyle = FRUIT_COLORS[fruitType] || '#000';
+          ctx.lineWidth = feather;
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.filter = `blur(${feather/2}px)`;
           ctx.stroke();
-          
-          // Add a second, thinner, darker line for more definition
-          ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+          ctx.restore();
+
+          // Final sharp inner border for definition
+          ctx.save();
+          createPath(scale);
+          ctx.strokeStyle = 'rgba(0,0,0,0.4)';
           ctx.lineWidth = 2;
           ctx.stroke();
+          ctx.restore();
           
           ctx.restore();
         };
 
         // Draw eyes and mouth with significant scaling for the iconic look
-        drawMaskedRegion(leftEyeIndices, 1.6);
-        drawMaskedRegion(rightEyeIndices, 1.6);
-        drawMaskedRegion(mouthIndices, 1.5);
+        // We use slightly different scales for eyes and mouth to balance the look
+        drawMaskedRegion(leftEyeIndices, 1.9, 12);
+        drawMaskedRegion(rightEyeIndices, 1.9, 12);
+        drawMaskedRegion(mouthIndices, 1.7, 15);
 
       } else {
         // If no face, show fruit in center or dimmed video
