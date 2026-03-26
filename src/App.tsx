@@ -72,6 +72,7 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'chat' | 'logs'>('chat');
   const roomRef = useRef<Room | null>(null);
 
   // Auto-scroll chat
@@ -904,51 +905,90 @@ export default function App() {
           {/* Chat & Logs Tabs */}
           <div className="flex-1 bg-zinc-900/40 border border-white/5 backdrop-blur-3xl rounded-[2rem] flex flex-col overflow-hidden shadow-2xl min-h-0">
             <div className="flex border-b border-white/5">
-              <button className="flex-1 p-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-orange-500 text-white">
+              <button 
+                onClick={() => setActiveTab('chat')}
+                className={cn(
+                  "flex-1 p-4 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all",
+                  activeTab === 'chat' ? "border-orange-500 text-white" : "border-transparent text-zinc-500 hover:text-zinc-300"
+                )}
+              >
                 Chat
               </button>
-              <button className="flex-1 p-4 text-[10px] font-black uppercase tracking-widest border-b-2 border-transparent text-zinc-500 hover:text-zinc-300 transition-colors">
+              <button 
+                onClick={() => setActiveTab('logs')}
+                className={cn(
+                  "flex-1 p-4 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all",
+                  activeTab === 'logs' ? "border-orange-500 text-white" : "border-transparent text-zinc-500 hover:text-zinc-300"
+                )}
+              >
                 Logs
               </button>
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar flex flex-col">
-              <div className="flex-1 space-y-4">
-                {room.chat.length === 0 && (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2 opacity-50">
-                    <MessageSquare className="w-8 h-8" />
-                    <p className="text-[10px] font-black uppercase tracking-widest">No messages yet</p>
-                  </div>
-                )}
-                {room.chat.map((msg, i) => (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    key={msg.timestamp + i}
-                    className={cn(
-                      "flex flex-col gap-1",
-                      msg.senderId === peerRef.current?.id ? "items-end" : "items-start"
-                    )}
-                  >
-                    <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500 px-1">
-                      {msg.senderName}
-                    </span>
-                    <div className={cn(
-                      "px-4 py-2 rounded-2xl text-xs font-medium max-w-[85%]",
-                      msg.senderId === peerRef.current?.id 
-                        ? "bg-orange-600 text-white rounded-tr-none" 
-                        : "bg-white/5 border border-white/5 text-zinc-200 rounded-tl-none"
-                    )}>
-                      {msg.text}
+              {activeTab === 'chat' ? (
+                <div className="flex-1 space-y-4">
+                  {room.chat.length === 0 && (
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2 opacity-50">
+                      <MessageSquare className="w-8 h-8" />
+                      <p className="text-[10px] font-black uppercase tracking-widest">No messages yet</p>
                     </div>
-                  </motion.div>
-                ))}
-                <div ref={chatEndRef} />
-              </div>
+                  )}
+                  {room.chat.map((msg, i) => (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      key={msg.timestamp + i}
+                      className={cn(
+                        "flex flex-col gap-1",
+                        msg.senderId === peerRef.current?.id ? "items-end" : "items-start"
+                      )}
+                    >
+                      <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500 px-1">
+                        {msg.senderName}
+                      </span>
+                      <div className={cn(
+                        "px-4 py-2 rounded-2xl text-xs font-medium max-w-[85%]",
+                        msg.senderId === peerRef.current?.id 
+                          ? "bg-orange-600 text-white rounded-tr-none" 
+                          : "bg-white/5 border border-white/5 text-zinc-200 rounded-tl-none"
+                      )}>
+                        {msg.text}
+                      </div>
+                    </motion.div>
+                  ))}
+                  <div ref={chatEndRef} />
+                </div>
+              ) : (
+                <div className="flex-1 space-y-3">
+                  {room.logs.length === 0 && (
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-600 space-y-2 opacity-50">
+                      <Info className="w-8 h-8" />
+                      <p className="text-[10px] font-black uppercase tracking-widest">No logs yet</p>
+                    </div>
+                  )}
+                  {room.logs.map((log, i) => (
+                    <motion.div
+                      initial={{ opacity: 0, x: -5 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      key={log.timestamp + i}
+                      className={cn(
+                        "p-3 rounded-xl border text-[10px] font-bold leading-relaxed uppercase tracking-wider",
+                        log.type === 'danger' ? "bg-red-500/10 border-red-500/20 text-red-400" :
+                        log.type === 'success' ? "bg-green-500/10 border-green-500/20 text-green-400" :
+                        log.type === 'system' ? "bg-orange-500/10 border-orange-500/20 text-orange-400" :
+                        "bg-white/5 border-white/5 text-zinc-400"
+                      )}
+                    >
+                      {log.message}
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Chat Input */}
-            {(room.status !== 'playing' || (me?.isAlive || room.phase === 'game_over')) && (
+            {activeTab === 'chat' && (room.status !== 'playing' || (me?.isAlive || room.phase === 'game_over')) && (
               <form onSubmit={sendChatMessage} className="p-4 bg-black/20 border-t border-white/5 flex gap-2">
                 <input 
                   type="text"
