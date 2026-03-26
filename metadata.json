@@ -1,0 +1,5 @@
+{
+  "name": "Fruit Mafia AR",
+  "description": "A real-time social deduction game where players' heads are replaced by animated fruits using AR face tracking.",
+  "requestFramePermissions": ["camera", "microphone"]
+}
