@@ -186,7 +186,9 @@ export default function App() {
 
     try {
       const constraints: MediaStreamConstraints = { 
-        video: selectedCameraId ? { deviceId: { exact: selectedCameraId } } : true, 
+        video: selectedCameraId 
+          ? { deviceId: { exact: selectedCameraId }, width: { ideal: 640 }, height: { ideal: 480 } } 
+          : { width: { ideal: 640 }, height: { ideal: 480 } }, 
         audio: true 
       };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
