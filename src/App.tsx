@@ -882,10 +882,10 @@ export default function App() {
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, ease: [0.23, 1, 0.32, 1] }}
-          className="w-full max-w-7xl grid lg:grid-cols-2 gap-20 items-center z-10"
+          className="w-full max-w-[1400px] grid lg:grid-cols-[1.4fr_1fr] gap-12 xl:gap-24 items-center z-10 px-10"
         >
           {/* Left Side: Editorial Branding - Recipe 2 */}
-          <div className="space-y-16">
+          <div className="space-y-16 lg:pr-6">
             <div className="space-y-8">
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
@@ -902,7 +902,7 @@ export default function App() {
                   initial={{ scale: 0.8, opacity: 0, rotateX: 45 }}
                   animate={{ scale: 1, opacity: 1, rotateX: 0 }}
                   transition={{ delay: 0.4, type: "spring", stiffness: 50 }}
-                  className={cn("text-[12vw] lg:text-[10rem] font-black tracking-tighter uppercase italic leading-[0.8] mix-blend-difference", theme.text)}
+                  className={cn("text-[10vw] lg:text-[5.5rem] xl:text-[7rem] font-black tracking-tighter uppercase italic leading-[0.85]", theme.text)}
                 >
                   Фруктовая <br />
                   <span className={theme.accent}>Мафия</span>
@@ -994,7 +994,7 @@ export default function App() {
           </div>
 
           {/* Right Side: Auth Form - Hardware/Glassmorphism - Recipe 3/7 */}
-          <div className="relative">
+          <div className="relative max-w-xl mx-auto lg:mx-0 w-full">
             {/* Decorative Glow */}
             <div className="absolute -inset-4 bg-orange-600/20 blur-[100px] rounded-full opacity-50 animate-pulse" />
             
@@ -1521,7 +1521,7 @@ export default function App() {
 
       <main className="flex-1 p-10 flex gap-10 overflow-hidden relative z-10">
         {/* Game Grid */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-10 overflow-y-auto pr-4 custom-scrollbar">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-8 overflow-y-auto pr-4 custom-scrollbar">
           <AnimatePresence mode="popLayout">
             {room.players.map(player => (
               <motion.div 
@@ -1539,7 +1539,7 @@ export default function App() {
                   room.phase === 'night' && me?.role === 'mafia' && player.role === 'mafia' && "border-red-600/50 shadow-[0_0_30px_rgba(220,38,38,0.2)]"
                 )}
               >
-                <div className="aspect-[4/5] relative">
+                <div className="aspect-[3/4] relative">
                   <FruitFace
                     stream={player.id === peerRef.current?.id ? localStream : peerStreams[player.id]}
                     fruitType={player.fruit}
