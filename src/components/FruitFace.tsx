@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FaceMesh } from '@mediapipe/face_mesh';
 import { Camera } from '@mediapipe/camera_utils';
 import { Shield, Target, Search, Skull, Heart, User, CheckCircle2, XCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { cn } from '../lib/utils';
 
 interface FruitFaceProps {
   stream: MediaStream | null;
@@ -244,34 +246,48 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
         </div>
       )}
       <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 rounded text-white text-xs font-medium">
-        {playerName} {isLocal && "(You)"}
+        {playerName} {isLocal && "(Вы)"}
       </div>
 
       {/* Status Icons Overlay */}
-      {status && (
-        <div className="absolute top-4 right-4 flex flex-col gap-2">
-          {status === 'protected' && (
-            <div className="p-2 bg-green-600 rounded-full shadow-lg shadow-green-900/40 animate-pulse">
-              <Shield className="w-5 h-5 text-white" />
+      <AnimatePresence>
+        {status && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.5, y: 20 }}
+            className="absolute bottom-8 right-8 z-30"
+          >
+            <div className={cn(
+              "w-16 h-16 rounded-[1.5rem] flex items-center justify-center border-2 shadow-2xl backdrop-blur-xl transition-all duration-500",
+              status === 'targeted' ? "bg-red-600/20 border-red-500/50 text-red-500 shadow-red-500/20" :
+              status === 'protected' ? "bg-green-600/20 border-green-500/50 text-green-500 shadow-green-500/20" :
+              status === 'investigated_mafia' ? "bg-red-600/20 border-red-500/50 text-red-500 shadow-red-500/20" :
+              status === 'investigated_citizen' ? "bg-green-600/20 border-green-500/50 text-green-500 shadow-green-500/20" :
+              "bg-white/10 border-white/20 text-white"
+            )}>
+              {status === 'targeted' && <Skull className="w-8 h-8 animate-pulse" />}
+              {status === 'protected' && <Shield className="w-8 h-8 animate-bounce" />}
+              {status === 'investigated_mafia' && <Search className="w-8 h-8 text-red-500" />}
+              {status === 'investigated_citizen' && <Search className="w-8 h-8 text-green-500" />}
             </div>
-          )}
-          {status === 'targeted' && (
-            <div className="p-2 bg-red-600 rounded-full shadow-lg shadow-red-900/40 animate-bounce">
-              <Target className="w-5 h-5 text-white" />
-            </div>
-          )}
-          {status === 'investigated_mafia' && (
-            <div className="p-2 bg-orange-600 rounded-full shadow-lg shadow-orange-900/40">
-              <Skull className="w-5 h-5 text-white" />
-            </div>
-          )}
-          {status === 'investigated_citizen' && (
-            <div className="p-2 bg-blue-600 rounded-full shadow-lg shadow-blue-900/40">
-              <User className="w-5 h-5 text-white" />
-            </div>
-          )}
-        </div>
-      )}
+            
+            {/* Status Label */}
+            <motion.div 
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="absolute right-full mr-4 top-1/2 -translate-y-1/2 px-4 py-2 bg-black/60 backdrop-blur-2xl rounded-xl border border-white/10 whitespace-nowrap"
+            >
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white italic">
+                {status === 'targeted' ? 'Цель' :
+                 status === 'protected' ? 'Защищен' :
+                 status === 'investigated_mafia' ? 'Мафия обнаружена' :
+                 status === 'investigated_citizen' ? 'Мирный житель' : ''}
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
