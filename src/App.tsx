@@ -56,7 +56,11 @@ interface Room {
   winner: 'mafia' | 'citizens' | null;
 }
 
-const FRUITS = ['watermelon', 'apple', 'orange', 'grapefruit', 'pomelo', 'lemon', 'lime', 'guava', 'apricot', 'tangerine'];
+const FRUITS = [
+  'watermelon', 'apple', 'orange', 'grapefruit', 'pomelo', 
+  'lemon', 'lime', 'guava', 'apricot', 'tangerine',
+  'strawberry', 'blueberry', 'cherry', 'banana', 'pineapple', 'mango'
+];
 
 const ROLE_NAMES: Record<Role, string> = {
   mafia: 'Мафия',
@@ -84,6 +88,8 @@ const STATUS_NAMES: Record<string, string> = {
 // --- Main Component ---
 
 export default function App() {
+  const [userType, setUserType] = useState<'none' | 'regular' | 'streamer'>('none');
+  const [selectedTheme, setSelectedTheme] = useState<string>('default');
   const [playerName, setPlayerName] = useState('');
   const [roomId, setRoomId] = useState('');
   const [isJoining, setIsJoining] = useState(false);
@@ -277,7 +283,7 @@ export default function App() {
         id: id,
         host: id,
         players: [{ id, name: trimmedName, role: null, isAlive: true, fruit: randomFruit }],
-        maxPlayers: 10,
+        maxPlayers: 16,
         status: 'lobby',
         phase: 'waiting',
         nightActions: { mafiaTarget: null, doctorTarget: null, detectiveTarget: null },
@@ -637,15 +643,223 @@ export default function App() {
     }
   }, [room, isPreviewing]);
 
+  const THEMES: Record<string, any> = {
+    default: {
+      bg: 'bg-zinc-950',
+      header: 'bg-black/40',
+      card: 'bg-black/40',
+      accent: 'text-orange-500',
+      accentBg: 'bg-orange-600',
+      border: 'border-white/5',
+      text: 'text-white',
+      muted: 'text-zinc-500',
+      overlay: 'bg-indigo-950/20'
+    },
+    sasavot: {
+      bg: 'bg-red-950',
+      header: 'bg-red-900/40',
+      card: 'bg-red-900/40',
+      accent: 'text-red-500',
+      accentBg: 'bg-red-700',
+      border: 'border-red-500/20',
+      text: 'text-red-50',
+      muted: 'text-red-400/60',
+      overlay: 'bg-red-950/40',
+      style: { fontFamily: 'serif' }
+    },
+    helin139: {
+      bg: 'bg-yellow-400',
+      header: 'bg-yellow-500/40',
+      card: 'bg-yellow-500/40',
+      accent: 'text-blue-600',
+      accentBg: 'bg-blue-600',
+      border: 'border-blue-500/20',
+      text: 'text-blue-900',
+      muted: 'text-blue-800/60',
+      overlay: 'bg-yellow-600/20'
+    },
+    rostikfacekid: {
+      bg: 'bg-[#0a0a0a]',
+      header: 'bg-[#1a1a1a]/40',
+      card: 'bg-[#1a1a1a]/40',
+      accent: 'text-[#00ffcc]',
+      accentBg: 'bg-[#00ffcc]',
+      border: 'border-[#00ffcc]/20',
+      text: 'text-[#eaeaea]',
+      muted: 'text-zinc-500',
+      overlay: 'bg-black/60',
+      glitch: true
+    },
+    iceicell: {
+      bg: 'bg-[#f2e6d8]',
+      header: 'bg-[#d89aa6]/20',
+      card: 'bg-white/40',
+      accent: 'text-[#7a3b4a]',
+      accentBg: 'bg-[#d89aa6]',
+      border: 'border-[#d89aa6]/40',
+      text: 'text-[#555]',
+      muted: 'text-[#7a3b4a]/60',
+      overlay: 'bg-[#d89aa6]/10',
+      glow: 'rgba(216, 154, 166, 0.2)'
+    },
+    formixyouknow: {
+      bg: 'bg-[#111]',
+      header: 'bg-black/40',
+      card: 'bg-zinc-900/40',
+      accent: 'text-[#ff7a00]',
+      accentBg: 'bg-[#ff7a00]',
+      border: 'border-[#ffd000]/20',
+      text: 'text-white',
+      muted: 'text-[#ffd000]/60',
+      overlay: 'bg-orange-950/20',
+      glow: 'rgba(255, 122, 0, 0.2)'
+    },
+    yurapivo: {
+      bg: 'bg-black',
+      header: 'bg-purple-900/20',
+      card: 'bg-purple-900/20',
+      accent: 'text-pink-500',
+      accentBg: 'bg-purple-600',
+      border: 'border-pink-500/20',
+      text: 'text-pink-50',
+      muted: 'text-purple-400',
+      overlay: 'bg-pink-950/20',
+      glow: 'rgba(236, 72, 153, 0.2)'
+    },
+    r4dom1r: {
+      bg: 'bg-zinc-900',
+      header: 'bg-black/60',
+      card: 'bg-black/40',
+      accent: 'text-zinc-400',
+      accentBg: 'bg-zinc-700',
+      border: 'border-white/10',
+      text: 'text-zinc-100',
+      muted: 'text-zinc-500',
+      overlay: 'bg-black/40',
+      glow: 'rgba(255, 255, 255, 0.1)'
+    },
+    tankzor: {
+      bg: 'bg-black',
+      header: 'bg-red-900/20',
+      card: 'bg-zinc-900/60',
+      accent: 'text-red-600',
+      accentBg: 'bg-red-700',
+      border: 'border-purple-500/20',
+      text: 'text-white',
+      muted: 'text-purple-400',
+      overlay: 'bg-red-950/40',
+      glow: 'rgba(220, 38, 38, 0.2)'
+    },
+    poisonika: {
+      bg: 'bg-white',
+      header: 'bg-zinc-100',
+      card: 'bg-zinc-50',
+      accent: 'text-[#7a3b4a]',
+      accentBg: 'bg-[#7a3b4a]',
+      border: 'border-[#7a3b4a]/20',
+      text: 'text-zinc-900',
+      muted: 'text-zinc-500',
+      overlay: 'bg-zinc-200/40',
+      handDrawn: true,
+      glow: 'rgba(122, 59, 74, 0.1)'
+    }
+  };
+
+  const theme = THEMES[selectedTheme] || THEMES.default;
+
+  if (userType === 'none') {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
+        <div className="max-w-md w-full space-y-8 text-center">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-black italic uppercase tracking-tighter text-white">Кто ты?</h1>
+            <p className="text-zinc-500 font-medium">Выберите ваш тип пользователя</p>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-4">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setUserType('regular')}
+              className="p-8 bg-zinc-900 border border-white/5 rounded-[2rem] hover:border-orange-500/50 transition-all group"
+            >
+              <User className="w-12 h-12 text-orange-500 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+              <h3 className="text-xl font-bold text-white">Обычный человек</h3>
+              <p className="text-zinc-500 text-sm mt-2">Стандартный визуальный стиль</p>
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setUserType('streamer')}
+              className="p-8 bg-zinc-900 border border-white/5 rounded-[2rem] hover:border-purple-500/50 transition-all group"
+            >
+              <Users className="w-12 h-12 text-purple-500 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+              <h3 className="text-xl font-bold text-white">Стример</h3>
+              <p className="text-zinc-500 text-sm mt-2">Персонализированные темы</p>
+            </motion.button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (userType === 'streamer' && selectedTheme === 'default') {
+    const streamers = [
+      { id: 'sasavot', name: 'Sasavot', desc: 'Bloodseeker Style' },
+      { id: 'helin139', name: 'Helin139', desc: 'Minions Style' },
+      { id: 'rostikfacekid', name: 'rostikfacekid', desc: 'Dark Anime Glitch' },
+      { id: 'iceicell', name: 'iceicell', desc: 'Soft Anime Sadcore' },
+      { id: 'formixyouknow', name: 'formixyouknow', desc: 'Savage Meme Burn' },
+      { id: 'yurapivo', name: 'yurapivo', desc: 'Pink & Purple Night' },
+      { id: 'r4dom1r', name: 'r4dom1r', desc: 'Mafia Sopranos' },
+      { id: 'tankzor', name: 'tankzor', desc: 'Red & Black Fury' },
+      { id: 'poisonika', name: 'poisonika', desc: 'Hand-drawn Aesthetic' },
+    ];
+
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
+        <div className="max-w-4xl w-full space-y-8 text-center">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-black italic uppercase tracking-tighter text-white">Выбери свой стиль</h1>
+            <p className="text-zinc-500 font-medium">Выберите стримера для применения темы</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {streamers.map((s) => (
+              <motion.button
+                key={s.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setSelectedTheme(s.id)}
+                className="p-6 bg-zinc-900 border border-white/5 rounded-3xl hover:border-white/20 transition-all text-left"
+              >
+                <h3 className="text-lg font-bold text-white">{s.name}</h3>
+                <p className="text-zinc-500 text-xs mt-1">{s.desc}</p>
+              </motion.button>
+            ))}
+          </div>
+          
+          <button 
+            onClick={() => setUserType('none')}
+            className="text-zinc-500 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest"
+          >
+            ← Назад
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!room) {
     return (
-      <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4 font-sans overflow-hidden relative selection:bg-orange-500/30">
-        <Toaster position="top-center" theme="dark" richColors />
+      <div className={cn("min-h-screen flex items-center justify-center p-4 font-sans overflow-hidden relative selection:bg-orange-500/30 transition-colors duration-1000", theme.bg, theme.text)}>
+        <Toaster position="top-center" theme={selectedTheme === 'poisonika' || selectedTheme === 'iceicell' ? 'light' : 'dark'} richColors />
         
         {/* Background Atmosphere - Recipe 7 */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-10%] left-[-10%] w-[80%] h-[80%] bg-orange-600/10 blur-[180px] rounded-full animate-pulse" />
-          <div className="absolute bottom-[-10%] right-[-10%] w-[80%] h-[80%] bg-indigo-600/10 blur-[180px] rounded-full animate-pulse" style={{ animationDelay: '3s' }} />
+          <div className={cn("absolute top-[-10%] left-[-10%] w-[80%] h-[80%] blur-[180px] rounded-full animate-pulse opacity-20", theme.accentBg)} />
+          <div className={cn("absolute bottom-[-10%] right-[-10%] w-[80%] h-[80%] blur-[180px] rounded-full animate-pulse opacity-20", theme.accentBg)} style={{ animationDelay: '3s' }} />
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.05] mix-blend-overlay" />
           
           {/* Floating Particles */}
@@ -677,9 +891,9 @@ export default function App() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.3 }}
-                className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-orange-600/10 border border-orange-600/20 text-orange-500 text-[11px] font-black uppercase tracking-[0.3em]"
+                className={cn("inline-flex items-center gap-3 px-4 py-1.5 rounded-full border text-[11px] font-black uppercase tracking-[0.3em]", theme.card, theme.border, theme.accent)}
               >
-                <div className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
+                <div className={cn("w-2 h-2 rounded-full animate-ping", theme.accentBg)} />
                 AR игра на выживание в реальном времени
               </motion.div>
               
@@ -688,20 +902,21 @@ export default function App() {
                   initial={{ scale: 0.8, opacity: 0, rotateX: 45 }}
                   animate={{ scale: 1, opacity: 1, rotateX: 0 }}
                   transition={{ delay: 0.4, type: "spring", stiffness: 50 }}
-                  className="text-[12vw] lg:text-[10rem] font-black tracking-tighter uppercase italic text-white leading-[0.8] mix-blend-difference"
+                  className={cn("text-[12vw] lg:text-[10rem] font-black tracking-tighter uppercase italic leading-[0.8] mix-blend-difference", theme.text)}
                 >
                   Фруктовая <br />
-                  <span className="text-orange-600">Мафия</span>
+                  <span className={theme.accent}>Мафия</span>
                 </motion.h1>
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: '100%' }}
                   transition={{ delay: 1, duration: 1.5, ease: "circOut" }}
-                  className="h-1 bg-gradient-to-r from-orange-600 to-transparent mt-4"
+                  className={cn("h-1 mt-4 bg-gradient-to-r from-transparent to-transparent", theme.accentBg)}
+                  style={{ backgroundImage: `linear-gradient(to right, var(--tw-gradient-from), transparent)` }}
                 />
               </div>
 
-              <p className="text-zinc-400 text-xl max-w-lg font-medium leading-relaxed">
+              <p className={cn("text-xl max-w-lg font-medium leading-relaxed", theme.muted)}>
                 Разоблачите предателей, скрывающихся за анимированными говорящими фруктами. Игра на выживание, где на кону доверие и хитрость.
               </p>
             </div>
@@ -783,20 +998,20 @@ export default function App() {
             {/* Decorative Glow */}
             <div className="absolute -inset-4 bg-orange-600/20 blur-[100px] rounded-full opacity-50 animate-pulse" />
             
-            <div className="bg-zinc-900/40 border border-white/10 backdrop-blur-3xl p-12 rounded-[4rem] shadow-[0_40px_100px_rgba(0,0,0,0.5)] relative overflow-hidden ring-1 ring-white/5">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-orange-600/10 blur-[100px] rounded-full -mr-32 -mt-32" />
+            <div className={cn("border backdrop-blur-3xl p-12 rounded-[4rem] shadow-[0_40px_100px_rgba(0,0,0,0.5)] relative overflow-hidden ring-1 ring-white/5", theme.card, theme.border)}>
+              <div className={cn("absolute top-0 right-0 w-64 h-64 blur-[100px] rounded-full -mr-32 -mt-32 opacity-20", theme.accentBg)} />
               
               {!isJoining ? (
                 <div className="space-y-12 relative z-10">
                   {/* Camera Preview Section */}
                   <div className="space-y-6">
                     <div className="flex items-center justify-between px-2">
-                      <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500">Проверка камеры</label>
+                      <label className={cn("text-[10px] uppercase tracking-[0.5em] font-black", theme.muted)}>Проверка камеры</label>
                       <button 
                         onClick={togglePreview}
                         className={cn(
                           "text-[10px] uppercase font-black transition-colors flex items-center gap-2 group",
-                          isPreviewing ? "text-red-500 hover:text-red-400" : "text-orange-500 hover:text-orange-400"
+                          isPreviewing ? "text-red-500 hover:text-red-400" : theme.accent
                         )}
                       >
                         {isPreviewing ? 'Выключить' : 'Включить предпросмотр'}
@@ -804,20 +1019,21 @@ export default function App() {
                       </button>
                     </div>
                     
-                    <div className="aspect-video bg-black/60 rounded-[2rem] border border-white/10 overflow-hidden relative group">
+                    <div className={cn("aspect-video bg-black/60 rounded-[2rem] border overflow-hidden relative group", theme.border)}>
                       {isPreviewing && localStream ? (
                         <FruitFace 
                           stream={localStream} 
                           fruitType="orange" 
                           isLocal={true} 
                           playerName="Предпросмотр" 
+                          theme={theme}
                         />
                       ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
-                          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-                            <RefreshCw className="w-8 h-8 text-zinc-800" />
+                          <div className={cn("w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border", theme.border)}>
+                            <RefreshCw className={cn("w-8 h-8", theme.muted)} />
                           </div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Камера выключена</p>
+                          <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Камера выключена</p>
                         </div>
                       )}
                     </div>
@@ -825,19 +1041,19 @@ export default function App() {
 
                   <div className="space-y-6">
                     <div className="flex items-center justify-between px-2">
-                      <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500">Личность игрока</label>
+                      <label className={cn("text-[10px] uppercase tracking-[0.5em] font-black", theme.muted)}>Личность игрока</label>
                       <div className="flex gap-1">
-                        {[...Array(3)].map((_, i) => <div key={i} className="w-1 h-1 rounded-full bg-orange-600/40" />)}
+                        {[...Array(3)].map((_, i) => <div key={i} className={cn("w-1 h-1 rounded-full opacity-40", theme.accentBg)} />)}
                       </div>
                     </div>
                     <div className="relative group">
-                      <div className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center group-focus-within:bg-orange-500/20 group-focus-within:rotate-12 transition-all duration-500">
-                        <User className="w-5 h-5 text-zinc-500 group-focus-within:text-orange-500 transition-colors" />
+                      <div className={cn("absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center transition-all duration-500", theme.border)}>
+                        <User className={cn("w-5 h-5 transition-colors", theme.muted)} />
                       </div>
                       <input
                         type="text"
                         placeholder="ВВЕДИТЕ ВАШЕ ИМЯ"
-                        className="w-full bg-black/60 border border-white/10 rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:border-orange-500/50 focus:ring-4 focus:ring-orange-500/10 transition-all text-base font-black tracking-[0.2em] uppercase placeholder:text-zinc-800 text-white"
+                        className={cn("w-full bg-black/60 border rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:ring-4 transition-all text-base font-black tracking-[0.2em] uppercase placeholder:opacity-20", theme.border, theme.text)}
                         value={playerName}
                         onChange={(e) => setPlayerName(e.target.value)}
                       />
@@ -890,7 +1106,11 @@ export default function App() {
                       whileTap={{ scale: 0.98 }}
                       onClick={createRoom}
                       disabled={isConnecting || !playerName.trim()}
-                      className="flex items-center justify-between px-10 py-10 bg-orange-600 hover:bg-orange-500 rounded-[2.5rem] transition-all group disabled:opacity-50 shadow-[0_20px_50px_rgba(234,88,12,0.4)] relative overflow-hidden"
+                      className={cn(
+                        "flex items-center justify-between px-10 py-10 rounded-[2.5rem] transition-all group disabled:opacity-50 relative overflow-hidden",
+                        theme.accentBg,
+                        "shadow-[0_20px_50px_rgba(0,0,0,0.4)]"
+                      )}
                     >
                       <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       <div className="flex flex-col items-start gap-2 relative z-10">
@@ -906,14 +1126,17 @@ export default function App() {
                       whileHover={{ scale: 1.02, y: -4 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setIsJoining(true)}
-                      className="flex items-center justify-between px-10 py-10 bg-white/5 hover:bg-white/10 rounded-[2.5rem] transition-all group border border-white/10 backdrop-blur-xl"
+                      className={cn(
+                        "flex items-center justify-between px-10 py-10 bg-white/5 hover:bg-white/10 rounded-[2.5rem] transition-all group border backdrop-blur-xl",
+                        theme.border
+                      )}
                     >
                       <div className="flex flex-col items-start gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40">Подключиться к комнате</span>
+                        <span className={cn("text-[10px] font-black uppercase tracking-[0.4em]", theme.muted)}>Подключиться к комнате</span>
                         <span className="text-3xl font-black uppercase italic tracking-tighter">Войти в игру</span>
                       </div>
                       <div className="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center group-hover:bg-white/10 group-hover:-rotate-12 transition-all duration-500">
-                        <LogIn className="w-8 h-8" />
+                        <LogIn className={cn("w-8 h-8", theme.accent)} />
                       </div>
                     </motion.button>
                   </div>
@@ -941,20 +1164,21 @@ export default function App() {
                       </button>
                     </div>
                     
-                    <div className="aspect-video bg-black/60 rounded-[2rem] border border-white/10 overflow-hidden relative group">
+                    <div className={cn("aspect-video bg-black/60 rounded-[2rem] border overflow-hidden relative group", theme.border)}>
                       {isPreviewing && localStream ? (
                         <FruitFace 
                           stream={localStream} 
                           fruitType="orange" 
                           isLocal={true} 
                           playerName="Предпросмотр" 
+                          theme={theme}
                         />
                       ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
-                          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-                            <RefreshCw className="w-8 h-8 text-zinc-800" />
+                          <div className={cn("w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border", theme.border)}>
+                            <RefreshCw className={cn("w-8 h-8", theme.muted)} />
                           </div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Камера выключена</p>
+                          <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Камера выключена</p>
                         </div>
                       )}
                     </div>
@@ -972,13 +1196,13 @@ export default function App() {
                       </button>
                     </div>
                     <div className="relative group">
-                      <div className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center group-focus-within:bg-orange-500/20 transition-all duration-500">
-                        <Search className="w-5 h-5 text-zinc-500 group-focus-within:text-orange-500 transition-colors" />
+                      <div className={cn("absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center transition-all duration-500", theme.border)}>
+                        <Search className={cn("w-5 h-5 transition-colors", theme.muted)} />
                       </div>
                       <input
                         type="text"
                         placeholder="6-ЗНАЧНЫЙ КОД"
-                        className="w-full bg-black/60 border border-white/10 rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:border-orange-500/50 focus:ring-4 focus:ring-orange-500/10 transition-all text-2xl font-black tracking-[0.4em] uppercase placeholder:text-zinc-800 text-center font-mono text-white"
+                        className={cn("w-full bg-black/60 border rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:ring-4 transition-all text-2xl font-black tracking-[0.4em] uppercase placeholder:opacity-20 text-center font-mono", theme.border, theme.text)}
                         value={roomId}
                         onChange={(e) => setRoomId(e.target.value.toUpperCase())}
                       />
@@ -986,15 +1210,15 @@ export default function App() {
                   </div>
 
                   <div className="space-y-6">
-                    <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500 ml-2">Ваше имя</label>
+                    <label className={cn("text-[10px] uppercase tracking-[0.5em] font-black ml-2", theme.muted)}>Ваше имя</label>
                     <div className="relative group">
-                      <div className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center group-focus-within:bg-orange-500/20 transition-all duration-500">
-                        <User className="w-5 h-5 text-zinc-500 group-focus-within:text-orange-500 transition-colors" />
+                      <div className={cn("absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center transition-all duration-500", theme.border)}>
+                        <User className={cn("w-5 h-5 transition-colors", theme.muted)} />
                       </div>
                       <input
                         type="text"
                         placeholder="ВВЕДИТЕ ВАШЕ ИМЯ"
-                        className="w-full bg-black/60 border border-white/10 rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:border-orange-500/50 focus:ring-4 focus:ring-orange-500/10 transition-all text-base font-black tracking-[0.2em] uppercase placeholder:text-zinc-800 text-white"
+                        className={cn("w-full bg-black/60 border rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:ring-4 transition-all text-base font-black tracking-[0.2em] uppercase placeholder:opacity-20", theme.border, theme.text)}
                         value={playerName}
                         onChange={(e) => setPlayerName(e.target.value)}
                       />
@@ -1046,7 +1270,11 @@ export default function App() {
                     whileTap={{ scale: 0.98 }}
                     onClick={joinRoom}
                     disabled={isConnecting || !roomId.trim() || !playerName.trim()}
-                    className="w-full flex items-center justify-center gap-6 py-10 bg-orange-600 hover:bg-orange-500 rounded-[2.5rem] transition-all font-black uppercase italic tracking-tighter text-3xl shadow-[0_20px_50px_rgba(234,88,12,0.4)] disabled:opacity-50 relative overflow-hidden group"
+                    className={cn(
+                      "w-full flex items-center justify-center gap-6 py-10 rounded-[2.5rem] transition-all font-black uppercase italic tracking-tighter text-3xl disabled:opacity-50 relative overflow-hidden group",
+                      theme.accentBg,
+                      "shadow-[0_20px_50px_rgba(0,0,0,0.4)]"
+                    )}
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                     {isConnecting ? (
@@ -1160,19 +1388,22 @@ export default function App() {
 
   return (
     <div className={cn(
-      "min-h-screen text-zinc-100 flex flex-col font-sans overflow-hidden selection:bg-orange-500/30 transition-colors duration-1000",
-      room.phase === 'night' ? "bg-[#020205]" : "bg-[#050505]"
-    )}>
-      <Toaster position="top-center" theme="dark" richColors />
+      "min-h-screen flex flex-col font-sans overflow-hidden transition-colors duration-1000",
+      theme.bg,
+      theme.text,
+      theme.glitch && "glitch-container",
+      theme.handDrawn && "hand-drawn-container"
+    )} style={theme.style}>
+      <Toaster position="top-center" theme={selectedTheme === 'poisonika' ? 'light' : 'dark'} richColors />
       
-      {/* Dynamic Background Atmosphere - Recipe 7 */}
+      {/* Dynamic Background Atmosphere */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <motion.div 
           animate={{ 
             scale: room.phase === 'night' ? 1.2 : 1,
             opacity: room.phase === 'night' ? 0.15 : 0.05
           }}
-          className="absolute top-[-10%] left-[-10%] w-[80%] h-[80%] bg-orange-600 blur-[180px] rounded-full" 
+          className={cn("absolute top-[-10%] left-[-10%] w-[80%] h-[80%] blur-[180px] rounded-full", theme.accentBg)} 
         />
         <motion.div 
           animate={{ 
@@ -1182,33 +1413,8 @@ export default function App() {
           className="absolute bottom-[-10%] right-[-10%] w-[80%] h-[80%] bg-indigo-600 blur-[180px] rounded-full" 
         />
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] mix-blend-overlay" />
-        
-        {/* Phase-specific particles */}
-        <AnimatePresence>
-          {room.phase === 'night' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0"
-            >
-              {[...Array(30)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: Math.random() * 1000 }}
-                  animate={{ 
-                    opacity: [0, 0.3, 0], 
-                    y: [Math.random() * 1000, Math.random() * 1000 - 200],
-                  }}
-                  transition={{ duration: 5 + Math.random() * 10, repeat: Infinity, ease: "linear" }}
-                  className="absolute w-0.5 h-0.5 bg-indigo-400 rounded-full"
-                  style={{ left: `${Math.random() * 100}%` }}
-                />
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
+
       <AnimatePresence>
         {(room.phase === 'night' || room.phase === 'day_results' || room.phase === 'voting' || room.phase === 'game_over') && (
           <motion.div
@@ -1222,9 +1428,9 @@ export default function App() {
               animate={{ scale: 1, opacity: 1, rotateX: 0 }}
               exit={{ scale: 1.5, opacity: 0 }}
               transition={{ type: "spring", damping: 12, stiffness: 100 }}
-              className="bg-black/80 backdrop-blur-3xl border border-white/10 px-20 py-10 rounded-[4rem] shadow-[0_0_100px_rgba(249,115,22,0.2)]"
+              className={cn("backdrop-blur-3xl border px-20 py-10 rounded-[4rem] shadow-2xl", theme.card, theme.border)}
             >
-              <h1 className="text-9xl font-black italic uppercase tracking-tighter text-white leading-none text-center">
+              <h1 className="text-9xl font-black italic uppercase tracking-tighter leading-none text-center">
                 {room.phase === 'night' && (
                   <div className="flex flex-col items-center">
                     <span className="text-indigo-500">Ночь <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Наступила</span></span>
@@ -1233,7 +1439,7 @@ export default function App() {
                     </p>
                   </div>
                 )}
-                {room.phase === 'day_results' && <span className="text-orange-500">День <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Настал</span></span>}
+                {room.phase === 'day_results' && <span className={theme.accent}>День <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Настал</span></span>}
                 {room.phase === 'voting' && <span className="text-red-500">Время <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Голосовать</span></span>}
                 {room.phase === 'game_over' && <span className="text-yellow-500">Игра <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Окончена</span></span>}
               </h1>
@@ -1249,62 +1455,62 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] pointer-events-none bg-indigo-950/20 backdrop-blur-[2px] mix-blend-multiply"
+            className={cn("fixed inset-0 z-[60] pointer-events-none backdrop-blur-[2px] mix-blend-multiply", theme.overlay)}
           />
         )}
       </AnimatePresence>
 
       {/* Header */}
-      <header className="h-24 border-b border-white/5 flex items-center justify-between px-10 bg-black/40 backdrop-blur-3xl sticky top-0 z-50 ring-1 ring-white/5">
+      <header className={cn("h-24 border-b flex items-center justify-between px-10 backdrop-blur-3xl sticky top-0 z-50 ring-1 ring-white/5", theme.header, theme.border)}>
         <div className="flex items-center gap-8">
           <motion.div 
             whileHover={{ scale: 1.05 }}
             className="flex flex-col cursor-default"
           >
-            <h2 className="text-4xl font-black italic tracking-tighter text-white uppercase leading-none">
-              Фруктовая <span className="text-orange-600">Мафия</span>
+            <h2 className="text-4xl font-black italic tracking-tighter uppercase leading-none">
+              Фруктовая <span className={theme.accent}>Мафия</span>
             </h2>
-            <span className="text-[8px] font-black tracking-[0.5em] uppercase text-zinc-500 mt-1">Социальная дедукция в AR</span>
+            <span className={cn("text-[8px] font-black tracking-[0.5em] uppercase mt-1", theme.muted)}>Социальная дедукция в AR</span>
           </motion.div>
           <div className="h-10 w-px bg-white/10" />
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 px-5 py-2.5 bg-white/5 rounded-2xl border border-white/5 shadow-inner group hover:bg-white/10 transition-colors">
-              <Users className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform" />
-              <span className="text-xs font-black tracking-widest uppercase text-white">{room.players.length} <span className="text-zinc-500">/ {room.maxPlayers}</span></span>
+            <div className={cn("flex items-center gap-3 px-5 py-2.5 rounded-2xl border shadow-inner group transition-colors", theme.card, theme.border)}>
+              <Users className={cn("w-4 h-4 group-hover:scale-110 transition-transform", theme.accent)} />
+              <span className="text-xs font-black tracking-widest uppercase">{room.players.length} <span className={theme.muted}>/ {room.maxPlayers}</span></span>
             </div>
-            <div className="flex items-center gap-3 px-5 py-2.5 bg-white/5 rounded-2xl border border-white/5 shadow-inner group hover:bg-white/10 transition-colors">
+            <div className={cn("flex items-center gap-3 px-5 py-2.5 rounded-2xl border shadow-inner group transition-colors", theme.card, theme.border)}>
               <div className={cn(
                 "w-2 h-2 rounded-full animate-pulse",
-                room.status === 'playing' ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]"
+                room.status === 'playing' ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" : cn(theme.accentBg, "shadow-[0_0_10px_rgba(249,115,22,0.5)]")
               )} />
-              <span className="text-xs font-black tracking-widest uppercase text-white">{STATUS_NAMES[room.status]}</span>
+              <span className="text-xs font-black tracking-widest uppercase">{STATUS_NAMES[room.status]}</span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3 px-6 py-3 bg-orange-600/10 rounded-2xl border border-orange-600/20">
-            <span className="text-[10px] font-black tracking-[0.2em] uppercase text-orange-500/60">Текущая фаза</span>
-            <span className="text-sm font-black tracking-widest uppercase text-orange-500 italic">{PHASE_NAMES[room.phase]}</span>
+          <div className={cn("flex items-center gap-3 px-6 py-3 rounded-2xl border", theme.card, theme.border)}>
+            <span className={cn("text-[10px] font-black tracking-[0.2em] uppercase opacity-60", theme.accent)}>Текущая фаза</span>
+            <span className={cn("text-sm font-black tracking-widest uppercase italic", theme.accent)}>{PHASE_NAMES[room.phase]}</span>
           </div>
           
           <div className="flex items-center gap-2">
             <button 
               onClick={copyCode}
-              className="px-6 py-3 bg-zinc-900 hover:bg-zinc-800 transition-all rounded-2xl border border-white/5 flex items-center gap-4 group active:scale-95"
+              className={cn("px-6 py-3 transition-all rounded-2xl border flex items-center gap-4 group active:scale-95", theme.card, theme.border)}
             >
               <div className="flex flex-col items-start">
-                <span className="text-[8px] font-black tracking-widest uppercase text-zinc-500">Код комнаты</span>
-                <span className="text-sm font-mono font-black text-white">{room.id}</span>
+                <span className={cn("text-[8px] font-black tracking-widest uppercase", theme.muted)}>Код комнаты</span>
+                <span className="text-sm font-mono font-black">{room.id}</span>
               </div>
               <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-zinc-500 group-hover:text-white" />}
+                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className={cn("w-4 h-4 group-hover:text-white", theme.muted)} />}
               </div>
             </button>
             
             <button 
               onClick={() => window.location.reload()}
-              className="w-12 h-12 flex items-center justify-center bg-zinc-900 hover:bg-red-900/40 transition-all rounded-2xl border border-white/5 text-zinc-600 hover:text-red-500 active:scale-95"
+              className={cn("w-12 h-12 flex items-center justify-center transition-all rounded-2xl border active:scale-95", theme.card, theme.border, "hover:bg-red-900/40 text-zinc-600 hover:text-red-500")}
               title="Покинуть комнату"
             >
               <LogOut className="w-5 h-5" />
@@ -1315,7 +1521,7 @@ export default function App() {
 
       <main className="flex-1 p-10 flex gap-10 overflow-hidden relative z-10">
         {/* Game Grid */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 overflow-y-auto pr-4 custom-scrollbar">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-10 overflow-y-auto pr-4 custom-scrollbar">
           <AnimatePresence mode="popLayout">
             {room.players.map(player => (
               <motion.div 
@@ -1328,7 +1534,7 @@ export default function App() {
                 className={cn(
                   "relative group rounded-[3rem] overflow-hidden border-4 transition-all duration-700",
                   player.isAlive 
-                    ? "border-white/5 shadow-2xl hover:border-orange-500/30 hover:shadow-orange-500/20" 
+                    ? cn(theme.border, "shadow-2xl hover:border-orange-500/30 hover:shadow-orange-500/20") 
                     : "border-red-900/30 grayscale opacity-40",
                   room.phase === 'night' && me?.role === 'mafia' && player.role === 'mafia' && "border-red-600/50 shadow-[0_0_30px_rgba(220,38,38,0.2)]"
                 )}
@@ -1339,6 +1545,7 @@ export default function App() {
                     fruitType={player.fruit}
                     isLocal={player.id === peerRef.current?.id}
                     playerName={player.name}
+                    theme={theme}
                     status={
                       room.phase === 'night' && me?.role === 'mafia' && room.nightActions.mafiaTarget === player.id ? 'targeted' :
                       room.phase === 'night' && me?.role === 'doctor' && room.nightActions.doctorTarget === player.id ? 'protected' :
@@ -1413,30 +1620,34 @@ export default function App() {
         {/* Sidebar */}
         <aside className="w-[28rem] flex flex-col gap-8">
           {/* Game Control Card */}
-          <div className="bg-zinc-900/40 border border-white/5 backdrop-blur-3xl rounded-[3rem] p-10 space-y-10 shadow-2xl relative overflow-hidden flex flex-col">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-orange-600/5 blur-3xl rounded-full -mr-20 -mt-20" />
+          <div className={cn(
+            "backdrop-blur-3xl rounded-[3rem] p-10 space-y-10 shadow-2xl relative overflow-hidden flex flex-col border",
+            theme.card,
+            theme.border
+          )} style={theme.handDrawn ? { borderRadius: '255px 15px 225px 15px/15px 225px 15px 255px' } : {}}>
+            <div className={cn("absolute top-0 right-0 w-40 h-40 blur-3xl rounded-full -mr-20 -mt-20 opacity-20", theme.accent.replace('text-', 'bg-'))} />
             
             <div className="space-y-6 relative z-10">
               <div className="flex items-center justify-between">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500">Статус игры</h3>
-                <div className="px-3 py-1 bg-white/5 rounded-full border border-white/5 text-[8px] font-black uppercase tracking-widest text-zinc-400">
+                <h3 className={cn("text-[10px] font-black uppercase tracking-[0.4em]", theme.muted)}>Статус игры</h3>
+                <div className={cn("px-3 py-1 rounded-full border text-[8px] font-black uppercase tracking-widest", theme.card, theme.border, theme.muted)}>
                   {room.players.filter(p => p.isAlive).length} Живы
                 </div>
               </div>
 
               {room.status === 'lobby' && room.host === peerRef.current?.id && (
                 <div className="space-y-6">
-                  <div className="p-8 bg-black/40 rounded-[2rem] border border-white/5 text-center space-y-4">
-                    <Users className="w-12 h-12 text-zinc-700 mx-auto" />
+                  <div className={cn("p-8 rounded-[2rem] border text-center space-y-4", theme.card, theme.border)}>
+                    <Users className={cn("w-12 h-12 mx-auto", theme.muted)} />
                     <div className="space-y-1">
-                      <p className="text-sm font-bold text-zinc-300">Ожидание игроков...</p>
-                      <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Нужно еще {Math.max(0, 5 - room.players.length)} для начала</p>
+                      <p className={cn("text-sm font-bold", theme.text)}>Ожидание игроков...</p>
+                      <p className={cn("text-[10px] uppercase tracking-widest", theme.muted)}>Нужно еще {Math.max(0, 5 - room.players.length)} для начала</p>
                     </div>
-                    <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                    <div className={cn("w-full h-1.5 rounded-full overflow-hidden", theme.card)}>
                       <motion.div 
                         initial={{ width: 0 }}
                         animate={{ width: `${(room.players.length / 5) * 100}%` }}
-                        className="h-full bg-orange-600"
+                        className={cn("h-full transition-colors", theme.accent.replace('text-', 'bg-'))}
                       />
                     </div>
                   </div>
@@ -1446,7 +1657,11 @@ export default function App() {
                     whileTap={{ scale: 0.98 }}
                     onClick={startGame}
                     disabled={room.players.length < 5}
-                    className="w-full py-8 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:grayscale transition-all rounded-[2rem] font-black uppercase italic tracking-tighter text-2xl shadow-[0_20px_40px_rgba(234,88,12,0.3)]"
+                    className={cn(
+                      "w-full py-8 transition-all rounded-[2rem] font-black uppercase italic tracking-tighter text-2xl shadow-2xl disabled:opacity-50 disabled:grayscale",
+                      theme.accent.replace('text-', 'bg-'),
+                      "text-white"
+                    )}
                   >
                     Начать игру
                   </motion.button>
@@ -1455,24 +1670,24 @@ export default function App() {
 
               {room.status === 'playing' && (
                 <div className="space-y-6">
-                  <div className="p-8 bg-black/40 rounded-[2rem] border border-white/5 space-y-6">
+                  <div className={cn("p-8 rounded-[2rem] border space-y-6", theme.card, theme.border)}>
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-orange-600/20 flex items-center justify-center border border-orange-600/20">
-                        {room.phase === 'night' ? <Moon className="w-6 h-6 text-orange-500" /> : <Sun className="w-6 h-6 text-orange-500" />}
+                      <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center border", theme.accent.replace('text-', 'bg-').replace('bg-', 'bg-opacity-20 bg-'), theme.accent.replace('text-', 'border-').replace('border-', 'border-opacity-20 border-'))}>
+                        {room.phase === 'night' ? <Moon className={cn("w-6 h-6", theme.accent)} /> : <Sun className={cn("w-6 h-6", theme.accent)} />}
                       </div>
                       <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Текущая фаза</p>
-                        <p className="text-xl font-black uppercase italic tracking-tighter text-white">{PHASE_NAMES[room.phase]}</p>
+                        <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Текущая фаза</p>
+                        <p className={cn("text-xl font-black uppercase italic tracking-tighter", theme.text)}>{PHASE_NAMES[room.phase]}</p>
                       </div>
                     </div>
                     
-                    <p className="text-xs text-zinc-400 leading-relaxed font-medium">
+                    <p className={cn("text-xs leading-relaxed font-medium", theme.muted)}>
                       {room.phase === 'night' && (
                         <>
                           Мафия выбирает цель. Доктор и Детектив выполняют свои обязанности.
                           {room.host === peerRef.current?.id && (
-                            <div className="mt-4 p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 space-y-2">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Ожидание действий:</p>
+                            <div className={cn("mt-4 p-4 rounded-2xl border space-y-2", theme.card, theme.border)}>
+                              <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.accent)}>Ожидание действий:</p>
                               <div className="flex flex-wrap gap-2">
                                 {room.players.some(p => p.role === 'mafia' && p.isAlive && !room.nightActions.mafiaTarget) && (
                                   <span className="px-2 py-1 bg-red-500/20 text-red-400 text-[9px] font-bold rounded-lg border border-red-500/20">Мафия</span>
@@ -1499,7 +1714,10 @@ export default function App() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={room.phase === 'night' ? skipNight : nextPhase}
-                      className="w-full py-6 bg-white text-black hover:bg-zinc-200 transition-all rounded-2xl font-black uppercase tracking-widest text-xs"
+                      className={cn(
+                        "w-full py-6 transition-all rounded-2xl font-black uppercase tracking-widest text-xs",
+                        theme.name === 'sasavot' ? "bg-red-600 text-white" : "bg-white text-black"
+                      )}
                     >
                       {room.phase === 'night' ? 'Завершить ночь' : room.phase === 'day_results' ? 'Начать обсуждение' : 'Открыть голосование'}
                     </motion.button>
@@ -1515,10 +1733,10 @@ export default function App() {
                   )}>
                     <Trophy className={cn("w-20 h-20 mx-auto", room.winner === 'mafia' ? "text-red-500" : "text-green-500")} />
                     <div className="space-y-1">
-                      <h4 className="text-4xl font-black uppercase italic tracking-tighter text-white">
+                      <h4 className={cn("text-4xl font-black uppercase italic tracking-tighter", theme.text)}>
                         {room.winner === 'mafia' ? 'Мафия победила' : 'Жители победили'}
                       </h4>
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-500">Игра окончена</p>
+                      <p className={cn("text-[10px] font-black uppercase tracking-[0.3em]", theme.muted)}>Игра окончена</p>
                     </div>
                   </div>
                   
@@ -1527,7 +1745,7 @@ export default function App() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => window.location.reload()}
-                      className="w-full py-6 bg-zinc-800 hover:bg-zinc-700 transition-all rounded-2xl font-black uppercase tracking-widest text-xs border border-white/5"
+                      className={cn("w-full py-6 transition-all rounded-2xl font-black uppercase tracking-widest text-xs border", theme.card, theme.border, theme.text)}
                     >
                       Вернуться в меню
                     </motion.button>
@@ -1540,14 +1758,14 @@ export default function App() {
             <div className="flex-1 min-h-0 flex flex-col mt-10">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-1 h-4 bg-orange-600 rounded-full" />
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-500">Журнал событий</h3>
+                  <div className={cn("w-1 h-4 rounded-full", theme.accent.replace('text-', 'bg-'))} />
+                  <h3 className={cn("text-[10px] font-black uppercase tracking-[0.5em]", theme.muted)}>Журнал событий</h3>
                 </div>
                 <div className="flex gap-1">
-                  {[...Array(3)].map((_, i) => <div key={i} className="w-1 h-1 rounded-full bg-zinc-800" />)}
+                  {[...Array(3)].map((_, i) => <div key={i} className={cn("w-1 h-1 rounded-full", theme.card)} />)}
                 </div>
               </div>
-              <div className="flex-1 bg-black/40 rounded-[2.5rem] border border-white/5 p-8 overflow-y-auto custom-scrollbar space-y-4 shadow-inner ring-1 ring-white/5">
+              <div className={cn("flex-1 rounded-[2.5rem] border p-8 overflow-y-auto custom-scrollbar space-y-4 shadow-inner ring-1 ring-white/5", theme.card, theme.border)}>
                 {room.logs.slice().reverse().map((log, i) => (
                   <motion.div 
                     initial={{ opacity: 0, x: -10 }}
@@ -1555,20 +1773,22 @@ export default function App() {
                     key={i} 
                     className="flex gap-4 text-[11px] leading-relaxed group"
                   >
-                    <span className="text-zinc-600 font-mono shrink-0 opacity-50 group-hover:opacity-100 transition-opacity">[{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}]</span>
+                    <span className={cn("font-mono shrink-0 opacity-50 group-hover:opacity-100 transition-opacity", theme.muted)}>
+                      [{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}]
+                    </span>
                     <span className={cn(
                       "font-medium transition-colors",
                       log.type === 'danger' ? "text-red-400" : 
                       log.type === 'success' ? "text-green-400" : 
-                      log.type === 'system' ? "text-orange-400" : "text-zinc-400"
+                      log.type === 'system' ? theme.accent : theme.muted
                     )}>
                       {log.message}
                     </span>
                   </motion.div>
                 ))}
                 {room.logs.length === 0 && (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-700 space-y-4">
-                    <div className="w-12 h-12 rounded-full border-2 border-dashed border-zinc-800 animate-[spin_10s_linear_infinite]" />
+                  <div className={cn("h-full flex flex-col items-center justify-center space-y-4", theme.muted)}>
+                    <div className={cn("w-12 h-12 rounded-full border-2 border-dashed animate-[spin_10s_linear_infinite]", theme.border)} />
                     <p className="text-[10px] font-black uppercase tracking-[0.4em]">Событий пока нет</p>
                   </div>
                 )}
@@ -1591,6 +1811,25 @@ export default function App() {
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: rgba(255, 255, 255, 0.1);
+        }
+
+        @keyframes glitch {
+          0% { transform: translate(0); }
+          20% { transform: translate(-2px, 2px); }
+          40% { transform: translate(-2px, -2px); }
+          60% { transform: translate(2px, 2px); }
+          80% { transform: translate(2px, -2px); }
+          100% { transform: translate(0); }
+        }
+
+        .glitch-effect {
+          animation: glitch 0.3s infinite;
+          text-shadow: 2px 0 #ff00c1, -2px 0 #00fff9;
+        }
+
+        .hand-drawn {
+          border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+          border: 2px solid currentColor;
         }
       `}</style>
     </div>
