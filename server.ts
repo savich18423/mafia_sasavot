@@ -25,13 +25,32 @@ async function startServer() {
   console.log(`AIS_PREVIEW: ${process.env.AIS_PREVIEW}`);
   console.log(`Has dist folder: ${hasDist}`);
 
+  // Vite middleware for development - MOVED TO TOP
+  let vite: any;
+  if (isDev) {
+    vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+      root: process.cwd(),
+    });
+    app.use(vite.middlewares);
+    console.log("Vite middleware initialized");
+  }
+
   // Explicitly set MIME types for common assets in dev mode
+  // This is a safety measure for environments with strict MIME checking
   if (isDev) {
     app.use((req, res, next) => {
       const ext = path.extname(req.path);
       if (['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
-        res.setHeader('Content-Type', 'application/javascript');
+        // If Vite didn't handle it, we might need to set the type, 
+        // but Vite SHOULD handle it. This is a fallback.
+        if (!res.getHeader('Content-Type')) {
+          res.setHeader('Content-Type', 'application/javascript');
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+        }
       }
+      console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - Ext: ${ext}`);
       next();
     });
   }
@@ -99,12 +118,12 @@ async function startServer() {
 
     socket.on("start-game", (roomId) => {
       const room = rooms.get(roomId);
-      if (room && room.host === socket.id && room.players.length >= 4) {
+      if (room && room.host === socket.id && room.players.length >= 5) {
         room.status = 'playing';
         
         // Assign roles
         const players = [...room.players];
-        const mafiaCount = Math.floor(players.length / 3);
+        const mafiaCount = Math.max(1, Math.floor(players.length / 4));
         const shuffled = players.sort(() => 0.5 - Math.random());
         
         shuffled.forEach((p, i) => {
@@ -123,7 +142,7 @@ async function startServer() {
         room.gameData.phase = 'night';
         io.to(roomId).emit("game-started", room);
       } else {
-        socket.emit("error", "Need at least 4 players to start");
+        socket.emit("error", "Need at least 5 players to start");
       }
     });
 
@@ -146,42 +165,36 @@ async function startServer() {
   });
 
   // Vite middleware for development
-  if (isDev) {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-      root: process.cwd(),
-    });
-    
-    // Use vite's connect instance as middleware
-    app.use(vite.middlewares);
-    
-    // In dev mode, Vite handles the index.html transformation
+  if (isDev && vite) {
     app.get('*', async (req, res, next) => {
       const url = req.originalUrl;
       try {
-        // Only handle HTML requests or fallbacks
+        // If it's a file request that Vite didn't handle, let it fall through
         if (url.includes('.') && !url.endsWith('.html')) {
           return next();
         }
         
-        let template = `
-          <!doctype html>
-          <html lang="en">
-            <head>
-              <meta charset="UTF-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-              <link rel="preconnect" href="https://fonts.googleapis.com">
-              <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-              <title>Fruit Mafia AR</title>
-            </head>
-            <body>
-              <div id="root"></div>
-              <script type="module" src="/src/main.tsx"></script>
-            </body>
-          </html>
-        `;
+        // Read index.html from disk if it exists, otherwise use template
+        let template;
+        const indexPath = path.join(process.cwd(), 'index.html');
+        if (fs.existsSync(indexPath)) {
+          template = fs.readFileSync(indexPath, 'utf-8');
+        } else {
+          template = `
+            <!doctype html>
+            <html lang="en">
+              <head>
+                <meta charset="UTF-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <title>Fruit Mafia AR</title>
+              </head>
+              <body>
+                <div id="root"></div>
+                <script type="module" src="/src/main.tsx"></script>
+              </body>
+            </html>
+          `;
+        }
         
         template = await vite.transformIndexHtml(url, template);
         res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
@@ -190,8 +203,7 @@ async function startServer() {
         next(e);
       }
     });
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
+  } else if (!isDev) {
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
