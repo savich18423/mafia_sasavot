@@ -92,11 +92,14 @@ export default function App() {
   const [peerStreams, setPeerStreams] = useState<Record<string, MediaStream>>({});
   const [error, setError] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'logs'>('chat');
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const roomRef = useRef<Room | null>(null);
 
   // Auto-scroll chat
@@ -134,6 +137,32 @@ export default function App() {
 
   // --- PeerJS Logic ---
 
+  useEffect(() => {
+    const getCameras = async () => {
+      try {
+        // Request permission first to get device labels
+        await navigator.mediaDevices.getUserMedia({ video: true });
+        
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        setCameras(videoDevices);
+        
+        if (videoDevices.length > 0) {
+          // Prioritize Snap Camera if available
+          const snapCam = videoDevices.find(d => d.label.toLowerCase().includes('snap camera'));
+          if (snapCam) {
+            setSelectedCameraId(snapCam.deviceId);
+          } else if (!selectedCameraId) {
+            setSelectedCameraId(videoDevices[0].deviceId);
+          }
+        }
+      } catch (err) {
+        console.error('Error getting cameras:', err);
+      }
+    };
+    getCameras();
+  }, []); // Run once on mount
+
   const broadcast = (updatedRoom: Room) => {
     setRoom({ ...updatedRoom });
     Object.values(connectionsRef.current).forEach((conn) => {
@@ -150,8 +179,17 @@ export default function App() {
   };
 
   const startMedia = async () => {
+    // If we already have a stream, stop it first to switch cameras
+    if (localStream) {
+      localStream.getTracks().forEach(track => track.stop());
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const constraints: MediaStreamConstraints = { 
+        video: selectedCameraId ? { deviceId: { exact: selectedCameraId } } : true, 
+        audio: true 
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       setLocalStream(stream);
       return stream;
     } catch (err) {
@@ -572,6 +610,26 @@ export default function App() {
 
   // --- Render Helpers ---
 
+  const togglePreview = async () => {
+    if (isPreviewing) {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        setLocalStream(null);
+      }
+      setIsPreviewing(false);
+    } else {
+      const stream = await startMedia();
+      if (stream) setIsPreviewing(true);
+    }
+  };
+
+  // Stop preview when switching to room
+  useEffect(() => {
+    if (room && isPreviewing) {
+      setIsPreviewing(false);
+    }
+  }, [room, isPreviewing]);
+
   if (!room) {
     return (
       <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4 font-sans overflow-hidden relative selection:bg-orange-500/30">
@@ -723,6 +781,41 @@ export default function App() {
               
               {!isJoining ? (
                 <div className="space-y-12 relative z-10">
+                  {/* Camera Preview Section */}
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between px-2">
+                      <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500">Проверка камеры</label>
+                      <button 
+                        onClick={togglePreview}
+                        className={cn(
+                          "text-[10px] uppercase font-black transition-colors flex items-center gap-2 group",
+                          isPreviewing ? "text-red-500 hover:text-red-400" : "text-orange-500 hover:text-orange-400"
+                        )}
+                      >
+                        {isPreviewing ? 'Выключить' : 'Включить предпросмотр'}
+                        <RefreshCw className={cn("w-3 h-3 transition-transform duration-500", isPreviewing && "animate-spin")} />
+                      </button>
+                    </div>
+                    
+                    <div className="aspect-video bg-black/60 rounded-[2rem] border border-white/10 overflow-hidden relative group">
+                      {isPreviewing && localStream ? (
+                        <FruitFace 
+                          stream={localStream} 
+                          fruitType="orange" 
+                          isLocal={true} 
+                          playerName="Предпросмотр" 
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
+                          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                            <RefreshCw className="w-8 h-8 text-zinc-800" />
+                          </div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Камера выключена</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="space-y-6">
                     <div className="flex items-center justify-between px-2">
                       <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500">Личность игрока</label>
@@ -742,6 +835,46 @@ export default function App() {
                         onChange={(e) => setPlayerName(e.target.value)}
                       />
                     </div>
+
+                    {cameras.length > 0 && (
+                      <div className="space-y-4">
+                        <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500 px-2">Выберите камеру (Snap Camera)</label>
+                        <div className="relative group">
+                          <div className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center group-focus-within:bg-orange-500/20 transition-all duration-500">
+                            <RefreshCw className="w-5 h-5 text-zinc-500 group-focus-within:text-orange-500 transition-colors" />
+                          </div>
+                          <select
+                            value={selectedCameraId}
+                            onChange={async (e) => {
+                              const newId = e.target.value;
+                              setSelectedCameraId(newId);
+                              if (isPreviewing) {
+                                if (localStream) {
+                                  localStream.getTracks().forEach(t => t.stop());
+                                }
+                                const constraints = { 
+                                  video: { deviceId: { exact: newId } }, 
+                                  audio: true 
+                                };
+                                try {
+                                  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                                  setLocalStream(stream);
+                                } catch (err) {
+                                  console.error("Error switching preview camera:", err);
+                                }
+                              }
+                            }}
+                            className="w-full bg-black/60 border border-white/10 rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:border-orange-500/50 focus:ring-4 focus:ring-orange-500/10 transition-all text-xs font-black tracking-[0.1em] uppercase text-white appearance-none cursor-pointer"
+                          >
+                            {cameras.map((camera) => (
+                              <option key={camera.deviceId} value={camera.deviceId} className="bg-zinc-900 text-white">
+                                {camera.label || `Камера ${camera.deviceId.slice(0, 5)}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid gap-6">
@@ -785,6 +918,41 @@ export default function App() {
                   transition={{ duration: 0.6, ease: "circOut" }}
                   className="space-y-12 relative z-10"
                 >
+                  {/* Camera Preview Section for Joining */}
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between px-2">
+                      <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500">Проверка камеры</label>
+                      <button 
+                        onClick={togglePreview}
+                        className={cn(
+                          "text-[10px] uppercase font-black transition-colors flex items-center gap-2 group",
+                          isPreviewing ? "text-red-500 hover:text-red-400" : "text-orange-500 hover:text-orange-400"
+                        )}
+                      >
+                        {isPreviewing ? 'Выключить' : 'Включить предпросмотр'}
+                        <RefreshCw className={cn("w-3 h-3 transition-transform duration-500", isPreviewing && "animate-spin")} />
+                      </button>
+                    </div>
+                    
+                    <div className="aspect-video bg-black/60 rounded-[2rem] border border-white/10 overflow-hidden relative group">
+                      {isPreviewing && localStream ? (
+                        <FruitFace 
+                          stream={localStream} 
+                          fruitType="orange" 
+                          isLocal={true} 
+                          playerName="Предпросмотр" 
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
+                          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                            <RefreshCw className="w-8 h-8 text-zinc-800" />
+                          </div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Камера выключена</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="space-y-6">
                     <div className="flex justify-between items-center px-2">
                       <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500">Код сессии</label>
@@ -824,6 +992,46 @@ export default function App() {
                         onChange={(e) => setPlayerName(e.target.value)}
                       />
                     </div>
+
+                    {cameras.length > 0 && (
+                      <div className="space-y-4">
+                        <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500 px-2">Выберите камеру (Snap Camera)</label>
+                        <div className="relative group">
+                          <div className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center group-focus-within:bg-orange-500/20 transition-all duration-500">
+                            <RefreshCw className="w-5 h-5 text-zinc-500 group-focus-within:text-orange-500 transition-colors" />
+                          </div>
+                          <select
+                            value={selectedCameraId}
+                            onChange={async (e) => {
+                              const newId = e.target.value;
+                              setSelectedCameraId(newId);
+                              if (isPreviewing) {
+                                if (localStream) {
+                                  localStream.getTracks().forEach(t => t.stop());
+                                }
+                                const constraints = { 
+                                  video: { deviceId: { exact: newId } }, 
+                                  audio: true 
+                                };
+                                try {
+                                  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                                  setLocalStream(stream);
+                                } catch (err) {
+                                  console.error("Error switching preview camera:", err);
+                                }
+                              }
+                            }}
+                            className="w-full bg-black/60 border border-white/10 rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:border-orange-500/50 focus:ring-4 focus:ring-orange-500/10 transition-all text-xs font-black tracking-[0.1em] uppercase text-white appearance-none cursor-pointer"
+                          >
+                            {cameras.map((camera) => (
+                              <option key={camera.deviceId} value={camera.deviceId} className="bg-zinc-900 text-white">
+                                {camera.label || `Камера ${camera.deviceId.slice(0, 5)}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <motion.button
