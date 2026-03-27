@@ -308,9 +308,12 @@ export default function App() {
       phase: 'night',
       players: updatedPlayers,
       nightActions: { mafiaTarget: null, doctorTarget: null, detectiveTarget: null },
-      logs: [{ message: 'The game has started! It is now night.', type: 'system', timestamp: Date.now() }, ...room.logs]
+      logs: [
+        { message: `Game started with ${room.players.length} players.`, type: 'system', timestamp: Date.now() },
+        { message: 'The game has started! It is now night.', type: 'system', timestamp: Date.now() + 1 },
+        ...room.logs
+      ]
     };
-    addLog(`Game started with ${room.players.length} players.`, 'system');
     broadcast(updatedRoom);
   };
 
@@ -322,17 +325,19 @@ export default function App() {
     const updatedActions = { ...room.nightActions };
     if (me.role === 'mafia') {
       updatedActions.mafiaTarget = targetId;
-      addLog('Mafia has chosen a target.', 'system');
+      const target = room.players.find(p => p.id === targetId);
+      addLog(`Mafia has chosen to eliminate ${target?.name}.`, 'system');
     }
     if (me.role === 'doctor') {
       updatedActions.doctorTarget = targetId;
-      addLog('Doctor has chosen someone to protect.', 'system');
+      const target = room.players.find(p => p.id === targetId);
+      addLog(`Doctor has chosen to protect ${target?.name}.`, 'system');
     }
     if (me.role === 'detective') {
       updatedActions.detectiveTarget = targetId;
       const target = room.players.find(p => p.id === targetId);
       toast.info(`${target?.name} is ${target?.role === 'mafia' ? 'MAFIA' : 'NOT MAFIA'}`);
-      addLog('Detective has investigated a player.', 'system');
+      addLog(`Detective has investigated ${target?.name}.`, 'system');
     }
 
     const updatedRoom = { ...room, nightActions: updatedActions };
@@ -416,7 +421,12 @@ export default function App() {
     if (!me || !me.isAlive) return;
 
     const updatedVotes = { ...room.votes, [me.id as string]: targetId };
-    const updatedRoom = { ...room, votes: updatedVotes };
+    const target = room.players.find(p => p.id === targetId);
+    const updatedRoom = { 
+      ...room, 
+      votes: updatedVotes,
+      logs: [{ message: `${me.name} cast their vote.`, type: 'info', timestamp: Date.now() }, ...room.logs]
+    };
     
     // If everyone alive has voted, resolve
     const aliveCount = room.players.filter(p => p.isAlive).length;
