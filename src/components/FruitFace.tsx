@@ -48,17 +48,34 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!stream || !videoRef.current || !canvasRef.current) return;
+    if (!stream || !videoRef.current || !canvasRef.current) {
+      setIsLoading(false);
+      return;
+    }
 
+    setIsLoading(true);
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     video.srcObject = stream;
+    video.autoplay = true;
+    video.playsInline = true;
+    
+    // Ensure video starts playing
+    const playVideo = async () => {
+      try {
+        if (video.paused) await video.play();
+      } catch (err) {
+        console.error('Error playing video:', err);
+      }
+    };
+    
+    playVideo();
 
     const faceMesh = new FaceMesh({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
@@ -210,19 +227,39 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
     let animationId: number;
     const processVideo = async () => {
       if (video.readyState >= 2) {
-        await faceMesh.send({ image: video });
+        try {
+          await faceMesh.send({ image: video });
+        } catch (err) {
+          console.error('FaceMesh processing error:', err);
+        }
       }
       animationId = requestAnimationFrame(processVideo);
     };
 
+    // Start processing immediately if video is already ready
+    if (video.readyState >= 2) {
+      processVideo();
+    }
+
     video.onloadedmetadata = () => {
-      video.play();
+      playVideo();
       processVideo();
     };
+    
+    video.onloadeddata = () => {
+      playVideo();
+      processVideo();
+    };
+
+    // Fallback: if MediaPipe takes too long, stop loading anyway
+    const timeoutId = setTimeout(() => {
+      setIsLoading(false);
+    }, 10000);
 
     return () => {
       cancelAnimationFrame(animationId);
       faceMesh.close();
+      clearTimeout(timeoutId);
     };
   }, [stream, fruitType]);
 
@@ -232,6 +269,7 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
         ref={videoRef}
         className="hidden"
         playsInline
+        autoPlay
         muted={isLocal}
       />
       <canvas
@@ -240,6 +278,14 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
         width={640}
         height={480}
       />
+      {!stream && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/80 space-y-4">
+          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+            <User className="w-8 h-8 text-zinc-600" />
+          </div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Ожидание потока...</p>
+        </div>
+      )}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
