@@ -120,8 +120,11 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
               maxY = Math.max(maxY, point.y);
             });
 
-            const width = (maxX - minX) * canvas.width * 3.5;
-            const height = (maxY - minY) * canvas.height * 3.5;
+            const faceWidth = (maxX - minX) * canvas.width;
+            const faceHeight = (maxY - minY) * canvas.height;
+            // Much larger fruit scaling and a base size to ensure visibility even when far from camera
+            const width = faceWidth * 5.5 + canvas.width * 0.35;
+            const height = faceHeight * 5.5 + canvas.height * 0.35;
             const centerX = (minX + maxX) / 2 * canvas.width;
             const centerY = (minY + maxY) / 2 * canvas.height;
 
@@ -205,16 +208,25 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
             };
 
             const tint = FRUIT_COLORS[currentFruit];
-            drawMaskedRegion(leftEyeIndices, 2.2, 6, tint);
-            drawMaskedRegion(rightEyeIndices, 2.2, 6, tint);
-            drawMaskedRegion(mouthIndices, 2.0, 10, tint);
+            // Slightly smaller masks relative to the larger fruit to ensure the fruit body is visible
+            drawMaskedRegion(leftEyeIndices, 1.8, 6, tint);
+            drawMaskedRegion(rightEyeIndices, 1.8, 6, tint);
+            drawMaskedRegion(mouthIndices, 1.6, 10, tint);
 
           } else {
-            ctx.globalAlpha = 0.5;
-            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-            ctx.globalAlpha = 1.0;
-            const w = 200, h = 200;
+            // Consistent solid background
+            ctx.fillStyle = FRUIT_COLORS[currentFruit] || '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw a large "waiting" fruit
+            const w = canvas.width * 0.6;
+            const h = (w / fruitImg.width) * fruitImg.height || canvas.height * 0.6;
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.4)';
+            ctx.shadowBlur = 40;
+            ctx.globalAlpha = 0.8;
             ctx.drawImage(fruitImg, canvas.width/2 - w/2, canvas.height/2 - h/2, w, h);
+            ctx.restore();
           }
         });
 
@@ -330,17 +342,17 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-2 h-2 rounded-full animate-pulse ${isLocal ? 'bg-green-500' : 'bg-orange-500'}`} />
-            <span className={`text-sm font-black uppercase tracking-widest truncate max-w-[120px] ${theme?.text || 'text-white'}`}>
+            <span className={`text-base font-black uppercase tracking-widest truncate max-w-[180px] ${theme?.text || 'text-white'}`}>
               {playerName} {isLocal && '(Вы)'}
             </span>
           </div>
           
           {status && (
             <div className="flex gap-2">
-              {status === 'protected' && <Shield className="w-4 h-4 text-green-400" />}
-              {status === 'targeted' && <Target className="w-4 h-4 text-red-400 animate-pulse" />}
-              {status === 'investigated_mafia' && <Skull className="w-4 h-4 text-red-500" />}
-              {status === 'investigated_citizen' && <Heart className="w-4 h-4 text-green-500" />}
+              {status === 'protected' && <Shield className="w-6 h-6 text-green-400" />}
+              {status === 'targeted' && <Target className="w-6 h-6 text-red-400 animate-pulse" />}
+              {status === 'investigated_mafia' && <Skull className="w-6 h-6 text-red-500" />}
+              {status === 'investigated_citizen' && <Heart className="w-6 h-6 text-green-500" />}
             </div>
           )}
         </div>
