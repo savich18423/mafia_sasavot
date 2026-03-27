@@ -1,9 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FaceMesh } from '@mediapipe/face_mesh';
-import { Camera } from '@mediapipe/camera_utils';
 import { Shield, Target, Search, Skull, Heart, User, CheckCircle2, XCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+
+// Global lock to prevent concurrent FaceMesh initializations which cause "Module.arguments" errors
+let isInitializingGlobal = false;
+const initQueue: (() => void)[] = [];
+
+const processQueue = () => {
+  if (initQueue.length > 0) {
+    const next = initQueue.shift();
+    if (next) setTimeout(next, 100); // Add a small delay between initializations
+  } else {
+    isInitializingGlobal = false;
+  }
+};
 
 interface FruitFaceProps {
   stream: MediaStream | null;
@@ -48,25 +60,207 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const faceMeshRef = useRef<FaceMesh | null>(null);
+  const fruitTypeRef = useRef(fruitType);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFaceMeshReady, setIsFaceMeshReady] = useState(false);
+
+  // Sync fruitType to ref
+  useEffect(() => {
+    fruitTypeRef.current = fruitType;
+  }, [fruitType]);
+
+  // Initialize FaceMesh once on mount
+  useEffect(() => {
+    let isMounted = true;
+    let faceMesh: FaceMesh | null = null;
+
+    const performInit = async () => {
+      try {
+        faceMesh = new FaceMesh({
+          locateFile: (file) => {
+            // Use a stable CDN path. Removing the specific version from the URL string 
+            // can sometimes help with internal loader consistency if it expects relative paths.
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+          },
+        });
+
+        faceMesh.setOptions({
+          maxNumFaces: 1,
+          refineLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+
+        faceMesh.onResults((results) => {
+          if (!isMounted || !canvasRef.current) return;
+          setIsLoading(false); // Ensure loading is off once we get results
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+
+          const currentFruit = fruitTypeRef.current;
+          const fruitImg = new Image();
+          fruitImg.src = FRUIT_IMAGES[currentFruit] || FRUIT_IMAGES.orange;
+
+          // 1. Fill background with fruit color
+          ctx.fillStyle = FRUIT_COLORS[currentFruit] || '#000000';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+            const landmarks = results.multiFaceLandmarks[0];
+            
+            let minX = 1, minY = 1, maxX = 0, maxY = 0;
+            landmarks.forEach(point => {
+              minX = Math.min(minX, point.x);
+              minY = Math.min(minY, point.y);
+              maxX = Math.max(maxX, point.x);
+              maxY = Math.max(maxY, point.y);
+            });
+
+            const width = (maxX - minX) * canvas.width * 2.8;
+            const height = (maxY - minY) * canvas.height * 2.8;
+            const centerX = (minX + maxX) / 2 * canvas.width;
+            const centerY = (minY + maxY) / 2 * canvas.height;
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 20;
+            ctx.shadowOffsetY = 10;
+            ctx.drawImage(fruitImg, centerX - width / 2, centerY - height / 2, width, height);
+            ctx.restore();
+
+            const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
+            const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+            const mouthIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409];
+
+            const drawMaskedRegion = (indices: number[], scale = 2.0, feather = 8, tintColor?: string) => {
+              ctx.save();
+              let cx = 0, cy = 0;
+              indices.forEach(idx => {
+                cx += landmarks[idx].x * canvas.width;
+                cy += landmarks[idx].y * canvas.height;
+              });
+              cx /= indices.length;
+              cy /= indices.length;
+
+              const createPath = (s: number) => {
+                ctx.beginPath();
+                indices.forEach((idx, i) => {
+                  const p = landmarks[idx];
+                  const px = cx + (p.x * canvas.width - cx) * s;
+                  const py = cy + (p.y * canvas.height - cy) * s;
+                  if (i === 0) ctx.moveTo(px, py);
+                  else ctx.lineTo(px, py);
+                });
+                ctx.closePath();
+              };
+
+              ctx.save();
+              createPath(scale * 1.15);
+              ctx.shadowBlur = feather * 2;
+              ctx.shadowColor = 'rgba(0,0,0,1)';
+              ctx.fillStyle = 'rgba(0,0,0,0.8)';
+              ctx.fill();
+              ctx.restore();
+
+              ctx.save();
+              createPath(scale);
+              ctx.clip();
+              ctx.translate(cx, cy);
+              ctx.scale(scale, scale);
+              ctx.translate(-cx, -cy);
+              ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+              
+              if (tintColor) {
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.fillStyle = tintColor;
+                ctx.globalAlpha = 0.2;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.globalAlpha = 1.0;
+                ctx.globalCompositeOperation = 'source-over';
+              }
+              ctx.restore();
+
+              ctx.save();
+              createPath(scale);
+              ctx.strokeStyle = FRUIT_COLORS[currentFruit] || '#000';
+              ctx.lineWidth = feather * 1.5;
+              ctx.filter = `blur(${feather}px)`;
+              ctx.stroke();
+              ctx.restore();
+
+              ctx.save();
+              createPath(scale);
+              ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+              ctx.lineWidth = 2;
+              ctx.stroke();
+              ctx.restore();
+              
+              ctx.restore();
+            };
+
+            const tint = FRUIT_COLORS[currentFruit];
+            drawMaskedRegion(leftEyeIndices, 2.2, 6, tint);
+            drawMaskedRegion(rightEyeIndices, 2.2, 6, tint);
+            drawMaskedRegion(mouthIndices, 2.0, 10, tint);
+
+          } else {
+            ctx.globalAlpha = 0.5;
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1.0;
+            const w = 200, h = 200;
+            ctx.drawImage(fruitImg, canvas.width/2 - w/2, canvas.height/2 - h/2, w, h);
+          }
+        });
+
+        // Wait for the internal WASM to actually load before proceeding
+        // This is a bit of a hack but helps with stability
+        if (typeof (faceMesh as any).initialize === 'function') {
+          await (faceMesh as any).initialize();
+        }
+
+        if (isMounted) {
+          faceMeshRef.current = faceMesh;
+          setIsFaceMeshReady(true);
+          setIsLoading(false); // Set loading to false once initialized
+        }
+      } catch (err) {
+        console.error("Failed to initialize FaceMesh:", err);
+        if (isMounted) setIsLoading(false);
+      } finally {
+        processQueue();
+      }
+    };
+
+    const startInit = () => {
+      if (isInitializingGlobal) {
+        initQueue.push(performInit);
+      } else {
+        isInitializingGlobal = true;
+        performInit();
+      }
+    };
+
+    startInit();
+
+    return () => {
+      isMounted = false;
+      if (faceMesh) {
+        faceMesh.close();
+      }
+      faceMeshRef.current = null;
+    };
+  }, []); // Only once on mount
 
   useEffect(() => {
-    if (!stream || !videoRef.current || !canvasRef.current) {
-      setIsLoading(false);
+    if (!stream || !videoRef.current || !faceMeshRef.current || !isFaceMeshReady) {
       return;
     }
 
-    setIsLoading(true);
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
     video.srcObject = stream;
-    video.autoplay = true;
-    video.playsInline = true;
     
-    // Ensure video starts playing
     const playVideo = async () => {
       try {
         if (video.paused) await video.play();
@@ -77,166 +271,19 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
     
     playVideo();
 
-    const faceMesh = new FaceMesh({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
-    });
-
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
-
-    const fruitImg = new Image();
-    fruitImg.src = FRUIT_IMAGES[fruitType] || FRUIT_IMAGES.orange;
-
-    faceMesh.onResults((results) => {
-      if (!ctx || !canvas) return;
-
-      // 1. Fill background with fruit color
-      ctx.fillStyle = FRUIT_COLORS[fruitType] || '#000000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        const landmarks = results.multiFaceLandmarks[0];
-        
-        // Calculate face bounds for fruit placement
-        let minX = 1, minY = 1, maxX = 0, maxY = 0;
-        landmarks.forEach(point => {
-          minX = Math.min(minX, point.x);
-          minY = Math.min(minY, point.y);
-          maxX = Math.max(maxX, point.x);
-          maxY = Math.max(maxY, point.y);
-        });
-
-        const width = (maxX - minX) * canvas.width * 2.8; // Slightly larger fruit
-        const height = (maxY - minY) * canvas.height * 2.8;
-        const centerX = (minX + maxX) / 2 * canvas.width;
-        const centerY = (minY + maxY) / 2 * canvas.height;
-
-        // 2. Draw fruit image (Body)
-        ctx.save();
-        // Add a subtle shadow to the fruit itself
-        ctx.shadowColor = 'rgba(0,0,0,0.3)';
-        ctx.shadowBlur = 20;
-        ctx.shadowOffsetY = 10;
-        ctx.drawImage(fruitImg, centerX - width / 2, centerY - height / 2, width, height);
-        ctx.restore();
-
-        // 3. Cut out eyes and mouth (draw original video in these regions)
-        const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
-        const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
-        const mouthIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409];
-
-        const drawMaskedRegion = (indices: number[], scale = 2.0, feather = 8, tintColor?: string) => {
-          ctx.save();
-          
-          // Calculate center of the region
-          let cx = 0, cy = 0;
-          indices.forEach(idx => {
-            cx += landmarks[idx].x * canvas.width;
-            cy += landmarks[idx].y * canvas.height;
-          });
-          cx /= indices.length;
-          cy /= indices.length;
-
-          // Create the path for clipping with scaling
-          const createPath = (s: number) => {
-            ctx.beginPath();
-            indices.forEach((idx, i) => {
-              const p = landmarks[idx];
-              const px = cx + (p.x * canvas.width - cx) * s;
-              const py = cy + (p.y * canvas.height - cy) * s;
-              if (i === 0) ctx.moveTo(px, py);
-              else ctx.lineTo(px, py);
-            });
-            ctx.closePath();
-          };
-
-          // 1. Draw a deep inner shadow/hole effect (The "Cut-out" look)
-          ctx.save();
-          createPath(scale * 1.15);
-          ctx.shadowBlur = feather * 2;
-          ctx.shadowColor = 'rgba(0,0,0,1)';
-          ctx.fillStyle = 'rgba(0,0,0,0.8)';
-          ctx.fill();
-          ctx.restore();
-
-          // 2. Clipping for the video content
-          ctx.save();
-          createPath(scale);
-          ctx.clip();
-          
-          // Draw the video frame
-          ctx.translate(cx, cy);
-          ctx.scale(scale, scale);
-          ctx.translate(-cx, -cy);
-          ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-          
-          // 3. Add a subtle color tint to match the fruit (Integration)
-          if (tintColor) {
-            ctx.globalCompositeOperation = 'multiply';
-            ctx.fillStyle = tintColor;
-            ctx.globalAlpha = 0.2;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.globalAlpha = 1.0;
-            ctx.globalCompositeOperation = 'source-over';
-          }
-          ctx.restore();
-
-          // 4. Smooth blending edge (The "Skin" of the fruit)
-          ctx.save();
-          createPath(scale);
-          ctx.strokeStyle = FRUIT_COLORS[fruitType] || '#000';
-          ctx.lineWidth = feather * 1.5;
-          ctx.filter = `blur(${feather}px)`;
-          ctx.stroke();
-          ctx.restore();
-
-          // 5. Sharp inner border for definition
-          ctx.save();
-          createPath(scale);
-          ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          ctx.restore();
-          
-          ctx.restore();
-        };
-
-        // Draw eyes and mouth with much larger scaling for the iconic look
-        const tint = FRUIT_COLORS[fruitType];
-        drawMaskedRegion(leftEyeIndices, 2.2, 6, tint);
-        drawMaskedRegion(rightEyeIndices, 2.2, 6, tint);
-        drawMaskedRegion(mouthIndices, 2.0, 10, tint);
-
-      } else {
-        // If no face, show fruit in center or dimmed video
-        ctx.globalAlpha = 0.5;
-        ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-        ctx.globalAlpha = 1.0;
-        
-        // Show a "waiting" fruit
-        const w = 200, h = 200;
-        ctx.drawImage(fruitImg, canvas.width/2 - w/2, canvas.height/2 - h/2, w, h);
-      }
-      setIsLoading(false);
-    });
-
     let animationId: number;
     const processVideo = async () => {
-      if (video.readyState >= 2) {
+      if (video.readyState >= 2 && faceMeshRef.current) {
         try {
-          await faceMesh.send({ image: video });
+          await faceMeshRef.current.send({ image: video });
         } catch (err) {
-          console.error('FaceMesh processing error:', err);
+          // Ignore processing errors to prevent crash loop
+          console.warn('FaceMesh processing warning:', err);
         }
       }
       animationId = requestAnimationFrame(processVideo);
     };
 
-    // Start processing immediately if video is already ready
     if (video.readyState >= 2) {
       processVideo();
     }
@@ -245,23 +292,11 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
       playVideo();
       processVideo();
     };
-    
-    video.onloadeddata = () => {
-      playVideo();
-      processVideo();
-    };
-
-    // Fallback: if MediaPipe takes too long, stop loading anyway
-    const timeoutId = setTimeout(() => {
-      setIsLoading(false);
-    }, 10000);
 
     return () => {
       cancelAnimationFrame(animationId);
-      faceMesh.close();
-      clearTimeout(timeoutId);
     };
-  }, [stream, fruitType]);
+  }, [stream, isFaceMeshReady]);
 
   return (
     <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border-2 border-zinc-800">
