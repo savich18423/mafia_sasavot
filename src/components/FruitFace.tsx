@@ -130,9 +130,9 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
             ctx.drawImage(fruitImg, centerX - width / 2, centerY - height / 2, width, height);
             ctx.restore();
 
-            const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
-            const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
-            const mouthIndices = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 185, 40, 39, 37, 0, 267, 269, 270, 409];
+            const leftEyeIndices = [33, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7];
+            const rightEyeIndices = [362, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382];
+            const mouthIndices = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146];
 
             const drawMaskedRegion = (indices: number[], scale = 2.0, feather = 8, tintColor?: string) => {
               ctx.save();
@@ -199,9 +199,9 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
             };
 
             const tint = FRUIT_COLORS[currentFruit];
-            drawMaskedRegion(leftEyeIndices, 2.2, 6, tint);
-            drawMaskedRegion(rightEyeIndices, 2.2, 6, tint);
-            drawMaskedRegion(mouthIndices, 2.0, 10, tint);
+            drawMaskedRegion(leftEyeIndices, 3.5, 6, tint);
+            drawMaskedRegion(rightEyeIndices, 3.5, 6, tint);
+            drawMaskedRegion(mouthIndices, 2.5, 10, tint);
 
           } else {
             ctx.globalAlpha = 0.5;
