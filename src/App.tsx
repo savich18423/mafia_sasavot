@@ -3,7 +3,7 @@ import Peer, { DataConnection } from 'peerjs';
 import { FruitFace } from './components/FruitFace';
 import { cn } from './lib/utils';
 import { 
-  User, Users, Play, LogIn, Plus, Shield, Skull, Heart, 
+  User, Users, Play, LogIn, Plus, Shield, Heart, 
   Search, MessageSquare, Send, Copy, Check, Info, 
   Moon, Sun, Vote, AlertCircle, Trophy, RefreshCw, LogOut
 } from 'lucide-react';
@@ -1336,58 +1336,6 @@ export default function App() {
                     }
                   />
                   
-                  {/* Player Info Overlay */}
-                  <div className="absolute top-8 left-8 right-8 flex justify-between items-start pointer-events-none z-20">
-                    <div className="px-5 py-2.5 bg-black/60 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl ring-1 ring-white/5">
-                      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white">{player.name}</p>
-                    </div>
-                    
-                    {room.status === 'playing' && player.id === peerRef.current?.id && (
-                      <motion.div 
-                        initial={{ scale: 0.8, opacity: 0, x: 20 }}
-                        animate={{ scale: 1, opacity: 1, x: 0 }}
-                        className="px-5 py-2.5 bg-orange-600 rounded-2xl shadow-[0_15px_30px_rgba(234,88,12,0.5)] border border-orange-400/30"
-                      >
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white italic">{ROLE_NAMES[player.role!]}</p>
-                      </motion.div>
-                    )}
-                  </div>
-
-                  {/* Dead Overlay */}
-                  {!player.isAlive && (
-                    <div className="absolute inset-0 bg-red-950/60 flex flex-col items-center justify-center backdrop-blur-sm z-30">
-                      <motion.div
-                        initial={{ scale: 0.5, rotate: -20 }}
-                        animate={{ scale: 1, rotate: 0 }}
-                        className="p-6 rounded-full bg-red-600 shadow-[0_0_50px_rgba(220,38,38,0.5)]"
-                      >
-                        <Skull className="w-12 h-12 text-white" />
-                      </motion.div>
-                      <p className="text-xs font-black uppercase tracking-[0.5em] text-white mt-6 drop-shadow-lg">Исключен</p>
-                    </div>
-                  )}
-
-                  {/* Voting Results Overlay */}
-                  {room.phase === 'elimination' && (
-                    <div className="absolute bottom-20 left-6 right-6 flex flex-wrap gap-2 z-20">
-                      {Object.entries(room.lastVotes)
-                        .filter(([_, targetId]) => targetId === player.id)
-                        .map(([voterId]) => {
-                          const voter = room.players.find(p => p.id === voterId);
-                          return (
-                            <motion.div 
-                              initial={{ scale: 0, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              key={voterId} 
-                              className="px-3 py-1.5 bg-black/80 backdrop-blur-xl rounded-xl border border-white/10 text-[9px] font-black uppercase text-zinc-300 shadow-xl"
-                            >
-                              {voter?.name}
-                            </motion.div>
-                          );
-                        })}
-                    </div>
-                  )}
-
                   {/* Action Button Overlay */}
                   {room.status === 'playing' && me?.isAlive && player.isAlive && player.id !== me.id && (
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center p-10 z-40 backdrop-blur-sm">
