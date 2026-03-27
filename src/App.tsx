@@ -443,6 +443,11 @@ export default function App() {
     }
   };
 
+  const skipNight = () => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    resolveNight(room);
+  };
+
   const resolveNight = (currentRoom: Room) => {
     const { mafiaTarget, doctorTarget, detectiveTarget } = currentRoom.nightActions;
     let killedId: string | null = null;
@@ -1220,7 +1225,14 @@ export default function App() {
               className="bg-black/80 backdrop-blur-3xl border border-white/10 px-20 py-10 rounded-[4rem] shadow-[0_0_100px_rgba(249,115,22,0.2)]"
             >
               <h1 className="text-9xl font-black italic uppercase tracking-tighter text-white leading-none text-center">
-                {room.phase === 'night' && <span className="text-indigo-500">Ночь <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Наступила</span></span>}
+                {room.phase === 'night' && (
+                  <div className="flex flex-col items-center">
+                    <span className="text-indigo-500">Ночь <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Наступила</span></span>
+                    <p className="mt-8 text-xs font-black uppercase tracking-[0.4em] text-indigo-400/60 pointer-events-none">
+                      {me?.role === 'citizen' ? 'Мирные жители спят...' : 'Наведите на игрока, чтобы выбрать цель'}
+                    </p>
+                  </div>
+                )}
                 {room.phase === 'day_results' && <span className="text-orange-500">День <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Настал</span></span>}
                 {room.phase === 'voting' && <span className="text-red-500">Время <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Голосовать</span></span>}
                 {room.phase === 'game_over' && <span className="text-yellow-500">Игра <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Окончена</span></span>}
@@ -1455,21 +1467,41 @@ export default function App() {
                     </div>
                     
                     <p className="text-xs text-zinc-400 leading-relaxed font-medium">
-                      {room.phase === 'night' && "Мафия выбирает цель. Доктор и Детектив выполняют свои обязанности."}
+                      {room.phase === 'night' && (
+                        <>
+                          Мафия выбирает цель. Доктор и Детектив выполняют свои обязанности.
+                          {room.host === peerRef.current?.id && (
+                            <div className="mt-4 p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 space-y-2">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Ожидание действий:</p>
+                              <div className="flex flex-wrap gap-2">
+                                {room.players.some(p => p.role === 'mafia' && p.isAlive && !room.nightActions.mafiaTarget) && (
+                                  <span className="px-2 py-1 bg-red-500/20 text-red-400 text-[9px] font-bold rounded-lg border border-red-500/20">Мафия</span>
+                                )}
+                                {room.players.some(p => p.role === 'doctor' && p.isAlive && !room.nightActions.doctorTarget) && (
+                                  <span className="px-2 py-1 bg-green-500/20 text-green-400 text-[9px] font-bold rounded-lg border border-green-500/20">Доктор</span>
+                                )}
+                                {room.players.some(p => p.role === 'detective' && p.isAlive && !room.nightActions.detectiveTarget) && (
+                                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-[9px] font-bold rounded-lg border border-blue-500/20">Детектив</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
                       {room.phase === 'day_results' && "Солнце встает. Город узнает, что произошло ночью."}
                       {room.phase === 'voting' && "Время обсуждения. Проголосуйте за того, кого подозреваете в причастности к Мафии."}
                       {room.phase === 'elimination' && "Голоса подсчитаны. Кто-то покидает игру."}
                     </p>
                   </div>
 
-                  {room.host === peerRef.current?.id && (room.phase === 'day_results' || room.phase === 'day_discussion') && (
+                  {room.host === peerRef.current?.id && (room.phase === 'night' || room.phase === 'day_results' || room.phase === 'day_discussion') && (
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      onClick={nextPhase}
+                      onClick={room.phase === 'night' ? skipNight : nextPhase}
                       className="w-full py-6 bg-white text-black hover:bg-zinc-200 transition-all rounded-2xl font-black uppercase tracking-widest text-xs"
                     >
-                      {room.phase === 'day_results' ? 'Начать обсуждение' : 'Открыть голосование'}
+                      {room.phase === 'night' ? 'Завершить ночь' : room.phase === 'day_results' ? 'Начать обсуждение' : 'Открыть голосование'}
                     </motion.button>
                   )}
                 </div>
