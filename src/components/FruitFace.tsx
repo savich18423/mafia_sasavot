@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FaceMesh } from '@mediapipe/face_mesh';
+import { Shield, Target, Search, Skull, Heart, User, CheckCircle2, XCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { cn } from '../lib/utils';
 
 // Global lock to prevent concurrent FaceMesh initializations which cause "Module.arguments" errors
 let isInitializingGlobal = false;
@@ -20,6 +23,7 @@ interface FruitFaceProps {
   isLocal?: boolean;
   playerName: string;
   status?: 'protected' | 'targeted' | 'investigated_mafia' | 'investigated_citizen' | null;
+  theme?: any;
 }
 
 const FRUIT_IMAGES: Record<string, string> = {
@@ -53,7 +57,8 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
   fruitType, 
   isLocal, 
   playerName,
-  status 
+  status,
+  theme
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -115,8 +120,8 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
               maxY = Math.max(maxY, point.y);
             });
 
-            const width = (maxX - minX) * canvas.width * 2.8;
-            const height = (maxY - minY) * canvas.height * 2.8;
+            const width = (maxX - minX) * canvas.width * 3.5;
+            const height = (maxY - minY) * canvas.height * 3.5;
             const centerX = (minX + maxX) / 2 * canvas.width;
             const centerY = (minY + maxY) / 2 * canvas.height;
 
@@ -129,7 +134,11 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
 
             const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
             const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
-            const mouthIndices = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146];
+            // Full mouth indices including inner and outer lips for a "fuller" look
+            const mouthIndices = [
+              61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146, // Outer
+              78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95 // Inner
+            ];
 
             const drawMaskedRegion = (indices: number[], scale = 2.0, feather = 8, tintColor?: string) => {
               ctx.save();
@@ -298,7 +307,10 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
   }, [stream, isFaceMeshReady]);
 
   return (
-    <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border-2 border-zinc-800">
+    <div className={cn(
+      "relative w-full aspect-[3/4] bg-black rounded-[3rem] overflow-hidden border-4 transition-all duration-500",
+      theme?.border || 'border-zinc-800'
+    )}>
       <video
         ref={videoRef}
         className="hidden"
@@ -309,9 +321,38 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
       <canvas
         ref={canvasRef}
         className="w-full h-full object-cover"
-        width={640}
-        height={480}
+        width={600}
+        height={800}
       />
+
+      {/* Player Info Overlay */}
+      <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-2 h-2 rounded-full animate-pulse ${isLocal ? 'bg-green-500' : 'bg-orange-500'}`} />
+            <span className={`text-sm font-black uppercase tracking-widest truncate max-w-[120px] ${theme?.text || 'text-white'}`}>
+              {playerName} {isLocal && '(Вы)'}
+            </span>
+          </div>
+          
+          {status && (
+            <div className="flex gap-2">
+              {status === 'protected' && <Shield className="w-4 h-4 text-green-400" />}
+              {status === 'targeted' && <Target className="w-4 h-4 text-red-400 animate-pulse" />}
+              {status === 'investigated_mafia' && <Skull className="w-4 h-4 text-red-500" />}
+              {status === 'investigated_citizen' && <Heart className="w-4 h-4 text-green-500" />}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Status Overlays */}
+      {status === 'targeted' && (
+        <div className="absolute inset-0 border-4 border-red-600/50 animate-pulse pointer-events-none z-20" />
+      )}
+      {status === 'protected' && (
+        <div className="absolute inset-0 border-4 border-green-400/30 pointer-events-none z-20" />
+      )}
     </div>
   );
 };
