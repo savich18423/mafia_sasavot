@@ -25,7 +25,7 @@ async function startServer() {
   console.log(`AIS_PREVIEW: ${process.env.AIS_PREVIEW}`);
   console.log(`Has dist folder: ${hasDist}`);
 
-  // Vite middleware for development - MOVED TO TOP
+  
   let vite: any;
   if (isDev) {
     vite = await createViteServer({
@@ -37,14 +37,12 @@ async function startServer() {
     console.log("Vite middleware initialized");
   }
 
-  // Explicitly set MIME types for common assets in dev mode
-  // This is a safety measure for environments with strict MIME checking
+ 
   if (isDev) {
     app.use((req, res, next) => {
       const ext = path.extname(req.path);
       if (['.ts', '.tsx', '.js', '.jsx'].includes(ext)) {
-        // If Vite didn't handle it, we might need to set the type, 
-        // but Vite SHOULD handle it. This is a fallback.
+        
         if (!res.getHeader('Content-Type')) {
           res.setHeader('Content-Type', 'application/javascript');
           res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -55,7 +53,7 @@ async function startServer() {
     });
   }
 
-  // Game state management
+  
   const rooms = new Map();
 
   io.on("connection", (socket) => {
@@ -68,9 +66,9 @@ async function startServer() {
         host: socket.id,
         players: [{ id: socket.id, name: playerName, peerId: null, role: null, isAlive: true, fruit: 'orange' }],
         maxPlayers: parseInt(maxPlayers) || 10,
-        status: 'lobby', // lobby, playing, ended
+        status: 'lobby', 
         gameData: {
-          phase: 'waiting', // waiting, day, night, voting
+          phase: 'waiting', 
           votes: {},
           logs: []
         }
@@ -121,7 +119,7 @@ async function startServer() {
       if (room && room.host === socket.id && room.players.length >= 5) {
         room.status = 'playing';
         
-        // Assign roles
+       
         const players = [...room.players];
         const mafiaCount = Math.max(1, Math.floor(players.length / 4));
         const shuffled = players.sort(() => 0.5 - Math.random());
@@ -164,17 +162,17 @@ async function startServer() {
     });
   });
 
-  // Vite middleware for development
+  
   if (isDev && vite) {
     app.get('*', async (req, res, next) => {
       const url = req.originalUrl;
       try {
-        // If it's a file request that Vite didn't handle, let it fall through
+        
         if (url.includes('.') && !url.endsWith('.html')) {
           return next();
         }
         
-        // Read index.html from disk if it exists, otherwise use template
+        
         let template;
         const indexPath = path.join(process.cwd(), 'index.html');
         if (fs.existsSync(indexPath)) {
