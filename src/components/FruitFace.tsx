@@ -24,6 +24,7 @@ interface FruitFaceProps {
   playerName: string;
   status?: 'protected' | 'targeted' | 'investigated_mafia' | 'investigated_citizen' | null;
   theme?: any;
+  scale?: number;
 }
 
 const FRUIT_IMAGES: Record<string, string> = {
@@ -58,7 +59,8 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
   isLocal, 
   playerName,
   status,
-  theme
+  theme,
+  scale = 3.2
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -122,9 +124,9 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
 
             const faceWidth = (maxX - minX) * canvas.width;
             const faceHeight = (maxY - minY) * canvas.height;
-            // Much larger fruit scaling and a base size to ensure visibility even when far from camera
-            const width = faceWidth * 5.5 + canvas.width * 0.35;
-            const height = faceHeight * 5.5 + canvas.height * 0.35;
+            // Reduced scaling to fit better in the camera view
+            const width = faceWidth * scale + canvas.width * 0.1;
+            const height = faceHeight * scale + canvas.height * 0.1;
             const centerX = (minX + maxX) / 2 * canvas.width;
             const centerY = (minY + maxY) / 2 * canvas.height;
 
@@ -208,10 +210,10 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
             };
 
             const tint = FRUIT_COLORS[currentFruit];
-            // Slightly smaller masks relative to the larger fruit to ensure the fruit body is visible
-            drawMaskedRegion(leftEyeIndices, 1.8, 6, tint);
-            drawMaskedRegion(rightEyeIndices, 1.8, 6, tint);
-            drawMaskedRegion(mouthIndices, 1.6, 10, tint);
+            // Adjusted mask scaling for the new fruit size
+            drawMaskedRegion(leftEyeIndices, 2.1, 6, tint);
+            drawMaskedRegion(rightEyeIndices, 2.1, 6, tint);
+            drawMaskedRegion(mouthIndices, 1.9, 10, tint);
 
           } else {
             // Consistent solid background
