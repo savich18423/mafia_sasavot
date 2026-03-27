@@ -1,8 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FaceMesh } from '@mediapipe/face_mesh';
-import { Shield, Target, Search, Skull, Heart, User, CheckCircle2, XCircle } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
 
 // Global lock to prevent concurrent FaceMesh initializations which cause "Module.arguments" errors
 let isInitializingGlobal = false;
@@ -315,62 +312,6 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
         width={640}
         height={480}
       />
-      {!stream && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/80 space-y-4">
-          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-            <User className="w-8 h-8 text-zinc-600" />
-          </div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Ожидание потока...</p>
-        </div>
-      )}
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/80">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-        </div>
-      )}
-      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 rounded text-white text-xs font-medium">
-        {playerName} {isLocal && "(Вы)"}
-      </div>
-
-      {/* Status Icons Overlay */}
-      <AnimatePresence>
-        {status && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.5, y: 20 }}
-            className="absolute bottom-8 right-8 z-30"
-          >
-            <div className={cn(
-              "w-16 h-16 rounded-[1.5rem] flex items-center justify-center border-2 shadow-2xl backdrop-blur-xl transition-all duration-500",
-              status === 'targeted' ? "bg-red-600/20 border-red-500/50 text-red-500 shadow-red-500/20" :
-              status === 'protected' ? "bg-green-600/20 border-green-500/50 text-green-500 shadow-green-500/20" :
-              status === 'investigated_mafia' ? "bg-red-600/20 border-red-500/50 text-red-500 shadow-red-500/20" :
-              status === 'investigated_citizen' ? "bg-green-600/20 border-green-500/50 text-green-500 shadow-green-500/20" :
-              "bg-white/10 border-white/20 text-white"
-            )}>
-              {status === 'targeted' && <Skull className="w-8 h-8 animate-pulse" />}
-              {status === 'protected' && <Shield className="w-8 h-8 animate-bounce" />}
-              {status === 'investigated_mafia' && <Search className="w-8 h-8 text-red-500" />}
-              {status === 'investigated_citizen' && <Search className="w-8 h-8 text-green-500" />}
-            </div>
-            
-            {/* Status Label */}
-            <motion.div 
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="absolute right-full mr-4 top-1/2 -translate-y-1/2 px-4 py-2 bg-black/60 backdrop-blur-2xl rounded-xl border border-white/10 whitespace-nowrap"
-            >
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white italic">
-                {status === 'targeted' ? 'Цель' :
-                 status === 'protected' ? 'Защищен' :
-                 status === 'investigated_mafia' ? 'Мафия обнаружена' :
-                 status === 'investigated_citizen' ? 'Мирный житель' : ''}
-              </p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
