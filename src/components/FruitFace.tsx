@@ -87,7 +87,7 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
 
         faceMesh.setOptions({
           maxNumFaces: 1,
-          refineLandmarks: true,
+          refineLandmarks: false, // Disable for better performance
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
         });
@@ -158,8 +158,7 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
 
               ctx.save();
               createPath(scale * 1.15);
-              ctx.shadowBlur = feather * 2;
-              ctx.shadowColor = 'rgba(0,0,0,1)';
+              ctx.shadowBlur = 0; // Disable expensive shadow blur
               ctx.fillStyle = 'rgba(0,0,0,0.8)';
               ctx.fill();
               ctx.restore();
@@ -175,7 +174,7 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
               if (tintColor) {
                 ctx.globalCompositeOperation = 'multiply';
                 ctx.fillStyle = tintColor;
-                ctx.globalAlpha = 0.2;
+                ctx.globalAlpha = 0.1; // Reduced alpha for faster blending
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.globalAlpha = 1.0;
                 ctx.globalCompositeOperation = 'source-over';
@@ -185,15 +184,14 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
               ctx.save();
               createPath(scale);
               ctx.strokeStyle = FRUIT_COLORS[currentFruit] || '#000';
-              ctx.lineWidth = feather * 1.5;
-              ctx.filter = `blur(${feather}px)`;
+              ctx.lineWidth = 2; // Simpler stroke without filter
               ctx.stroke();
               ctx.restore();
 
               ctx.save();
               createPath(scale);
-              ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-              ctx.lineWidth = 2;
+              ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+              ctx.lineWidth = 1;
               ctx.stroke();
               ctx.restore();
               
@@ -272,9 +270,13 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
     playVideo();
 
     let animationId: number;
-    const processVideo = async () => {
-      if (video.readyState >= 2 && faceMeshRef.current) {
+    let lastProcessTime = 0;
+    const FRAME_INTERVAL = 40; // ~25fps
+
+    const processVideo = async (now: number) => {
+      if (video.readyState >= 2 && faceMeshRef.current && (now - lastProcessTime >= FRAME_INTERVAL)) {
         try {
+          lastProcessTime = now;
           await faceMeshRef.current.send({ image: video });
         } catch (err) {
           // Ignore processing errors to prevent crash loop
@@ -285,12 +287,12 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
     };
 
     if (video.readyState >= 2) {
-      processVideo();
+      processVideo(performance.now());
     }
 
     video.onloadedmetadata = () => {
       playVideo();
-      processVideo();
+      processVideo(performance.now());
     };
 
     return () => {
