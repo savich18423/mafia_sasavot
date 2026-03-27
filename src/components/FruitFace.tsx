@@ -134,7 +134,7 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
             const rightEyeIndices = [362, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382];
             const mouthIndices = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146];
 
-            const drawMaskedRegion = (indices: number[], scale = 2.0, feather = 8, tintColor?: string) => {
+            const drawMaskedRegion = (indices: number[], scale = 2.0, feather = 8, tintColor?: string, offsetX = 0) => {
               ctx.save();
               let cx = 0, cy = 0;
               indices.forEach(idx => {
@@ -143,6 +143,9 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
               });
               cx /= indices.length;
               cy /= indices.length;
+
+              // Apply horizontal offset to separate features (like eyes)
+              cx += offsetX;
 
               const createPath = (s: number) => {
                 ctx.beginPath();
@@ -199,8 +202,8 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
             };
 
             const tint = FRUIT_COLORS[currentFruit];
-            drawMaskedRegion(leftEyeIndices, 3.5, 6, tint);
-            drawMaskedRegion(rightEyeIndices, 3.5, 6, tint);
+            drawMaskedRegion(leftEyeIndices, 2.8, 6, tint, -25);
+            drawMaskedRegion(rightEyeIndices, 2.8, 6, tint, 25);
             drawMaskedRegion(mouthIndices, 2.5, 10, tint);
 
           } else {
