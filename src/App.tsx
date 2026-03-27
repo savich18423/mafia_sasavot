@@ -21,6 +21,9 @@ interface Player {
   role: Role | null;
   isAlive: boolean;
   fruit: string;
+  isDisconnected?: boolean;
+  disconnectTime?: number;
+  sessionToken?: string;
 }
 
 interface GameLog {
@@ -54,6 +57,9 @@ interface Room {
   detectiveResults: Record<string, 'mafia' | 'citizen'>; // targetId -> role
   lastVotes: Record<string, string>; // voterId -> targetId
   winner: 'mafia' | 'citizens' | null;
+  isPaused?: boolean;
+  pausedBy?: string;
+  pauseTimer?: number;
 }
 
 const FRUITS = [
@@ -98,6 +104,12 @@ export default function App() {
   const [peerStreams, setPeerStreams] = useState<Record<string, MediaStream>>({});
   const [error, setError] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [chatInput, setChatInput] = useState('');
@@ -207,19 +219,94 @@ export default function App() {
     }
   };
 
+  const [sessionToken] = useState(() => {
+    const saved = localStorage.getItem('mafia_session_token');
+    if (saved) return saved;
+    const newToken = Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('mafia_session_token', newToken);
+    return newToken;
+  });
+
+  useEffect(() => {
+    const savedRoomId = localStorage.getItem('mafia_room_id');
+    const savedName = localStorage.getItem('mafia_player_name');
+    if (savedRoomId && savedName && !room) {
+      setRoomId(savedRoomId);
+      setPlayerName(savedName);
+      // Auto-join could be implemented here if desired
+    }
+  }, []);
+
+  useEffect(() => {
+    if (room) {
+      localStorage.setItem('mafia_room_id', room.id);
+      localStorage.setItem('mafia_player_name', playerName);
+    }
+  }, [room, playerName]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const currentRoom = roomRef.current;
+      if (!currentRoom || currentRoom.host !== peerRef.current?.id || !currentRoom.isPaused || !currentRoom.pauseTimer) return;
+
+      const elapsed = (Date.now() - currentRoom.pauseTimer) / 1000;
+      if (elapsed >= 20) {
+        // Time is up, but we keep the room paused until the host decides
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handlePeerConnection = (conn: DataConnection, stream: MediaStream) => {
     conn.on('data', (data: any) => {
       if (data.type === 'JOIN_REQUEST') {
         const currentRoom = roomRef.current;
         if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
         
+        // Check for reconnection
+        const existingPlayerIndex = currentRoom.players.findIndex(p => p.sessionToken === data.sessionToken);
+        
+        if (existingPlayerIndex !== -1) {
+          const existingPlayer = currentRoom.players[existingPlayerIndex];
+          const updatedPlayers = [...currentRoom.players];
+          updatedPlayers[existingPlayerIndex] = { 
+            ...existingPlayer, 
+            id: conn.peer, 
+            isDisconnected: false,
+            disconnectTime: undefined 
+          };
+          
+          let updatedRoom = { 
+            ...currentRoom, 
+            players: updatedPlayers,
+            logs: [{ message: `${data.playerName} вернулся в игру`, type: 'success', timestamp: Date.now() }, ...currentRoom.logs]
+          };
+
+          // Resume if this was the player who caused the pause
+          if (currentRoom.isPaused && currentRoom.pausedBy === existingPlayer.id) {
+            updatedRoom.isPaused = false;
+            updatedRoom.pausedBy = undefined;
+            updatedRoom.pauseTimer = undefined;
+          }
+
+          broadcast(updatedRoom);
+          return;
+        }
+
         if (currentRoom.players.length >= currentRoom.maxPlayers) {
           conn.send({ type: 'ERROR', message: 'Комната заполнена' });
           return;
         }
 
         const fruit = FRUITS.find(f => !currentRoom.players.map(p => p.fruit).includes(f)) || 'orange';
-        const newPlayer: Player = { id: conn.peer, name: data.playerName, role: null, isAlive: true, fruit };
+        const newPlayer: Player = { 
+          id: conn.peer, 
+          name: data.playerName, 
+          role: null, 
+          isAlive: true, 
+          fruit,
+          sessionToken: data.sessionToken
+        };
         const updatedRoom = { 
           ...currentRoom, 
           players: [...currentRoom.players, newPlayer],
@@ -254,6 +341,53 @@ export default function App() {
         setError(data.message);
         setIsConnecting(false);
       }
+
+      if (data.type === 'GAME_RESTART') {
+        const currentRoom = roomRef.current;
+        if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
+        restartGame();
+      }
+
+      if (data.type === 'GAME_CONTINUE') {
+        const currentRoom = roomRef.current;
+        if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
+        
+        // Remove the disconnected player who caused the pause
+        const updatedPlayers = currentRoom.players.filter(p => p.id !== currentRoom.pausedBy);
+        const updatedRoom = {
+          ...currentRoom,
+          players: updatedPlayers,
+          isPaused: false,
+          pausedBy: undefined,
+          pauseTimer: undefined,
+          logs: [{ message: 'Игра продолжена без одного игрока', type: 'info', timestamp: Date.now() }, ...currentRoom.logs]
+        };
+        broadcast(updatedRoom);
+      }
+    });
+
+    conn.on('close', () => {
+      const currentRoom = roomRef.current;
+      if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
+      
+      const player = currentRoom.players.find(p => p.id === conn.peer);
+      if (!player) return;
+
+      // Mark as disconnected
+      const updatedPlayers = currentRoom.players.map(p => 
+        p.id === conn.peer ? { ...p, isDisconnected: true, disconnectTime: Date.now() } : p
+      );
+
+      let updatedRoom = { ...currentRoom, players: updatedPlayers };
+
+      if (currentRoom.status === 'playing' && !currentRoom.isPaused) {
+        updatedRoom.isPaused = true;
+        updatedRoom.pausedBy = player.id;
+        updatedRoom.pauseTimer = Date.now();
+        updatedRoom.logs = [{ message: `${player.name} отключился. Ожидание 20 секунд...`, type: 'danger', timestamp: Date.now() }, ...updatedRoom.logs];
+      }
+
+      broadcast(updatedRoom);
     });
   };
 
@@ -283,7 +417,7 @@ export default function App() {
         id: id,
         host: id,
         players: [{ id, name: trimmedName, role: null, isAlive: true, fruit: randomFruit }],
-        maxPlayers: 16,
+        maxPlayers: 12,
         status: 'lobby',
         phase: 'waiting',
         nightActions: { mafiaTarget: null, doctorTarget: null, detectiveTarget: null },
@@ -294,6 +428,7 @@ export default function App() {
         logs: [{ message: 'Комната создана. Ожидание игроков...', type: 'system', timestamp: Date.now() }],
         winner: null
       };
+      initialRoom.players[0].sessionToken = sessionToken;
       setRoom(initialRoom);
       setIsConnecting(false);
       toast.success('Комната создана!');
@@ -344,7 +479,7 @@ export default function App() {
       connectionsRef.current[trimmedRoomId] = conn;
       
       conn.on('open', () => {
-        conn.send({ type: 'JOIN_REQUEST', playerName: trimmedName });
+        conn.send({ type: 'JOIN_REQUEST', playerName: trimmedName, sessionToken: sessionToken });
       });
 
       conn.on('error', (err) => {
@@ -404,6 +539,39 @@ export default function App() {
         { message: 'Игра началась! Наступила ночь.', type: 'system', timestamp: Date.now() + 1 },
         ...room.logs
       ]
+    };
+    broadcast(updatedRoom);
+  };
+
+  const continueGame = () => {
+    if (!room || room.host !== peerRef.current?.id || !room.isPaused) return;
+    
+    const updatedPlayers = room.players.filter(p => p.id !== room.pausedBy);
+    const updatedRoom: Room = {
+      ...room,
+      players: updatedPlayers,
+      isPaused: false,
+      pausedBy: undefined,
+      pauseTimer: undefined,
+      logs: [{ message: 'Игра продолжена без одного игрока', type: 'info', timestamp: Date.now() }, ...room.logs]
+    };
+    broadcast(updatedRoom);
+  };
+
+  const restartGame = () => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    const updatedRoom: Room = {
+      ...room,
+      status: 'lobby',
+      phase: 'waiting',
+      nightActions: { mafiaTarget: null, doctorTarget: null, detectiveTarget: null },
+      votes: {},
+      detectiveResults: {},
+      lastVotes: {},
+      isPaused: false,
+      pausedBy: undefined,
+      pauseTimer: undefined,
+      logs: [{ message: 'Игра перезапущена хостом', type: 'system', timestamp: Date.now() }, ...room.logs]
     };
     broadcast(updatedRoom);
   };
@@ -1027,6 +1195,7 @@ export default function App() {
                           isLocal={true} 
                           playerName="Предпросмотр" 
                           theme={theme}
+                          scale={1.5}
                         />
                       ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
@@ -1172,6 +1341,7 @@ export default function App() {
                           isLocal={true} 
                           playerName="Предпросмотр" 
                           theme={theme}
+                          scale={1.5}
                         />
                       ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
@@ -1797,6 +1967,78 @@ export default function App() {
           </div>
         </aside>
       </main>
+
+      {/* Pause Overlay */}
+      <AnimatePresence>
+        {room.isPaused && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-xl p-10"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              className={cn("max-w-2xl w-full rounded-[4rem] p-16 border-4 text-center space-y-12 shadow-[0_0_100px_rgba(0,0,0,0.5)]", theme.card, theme.border)}
+            >
+              <div className="space-y-6">
+                <div className="relative inline-block">
+                  <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                    className={cn("w-32 h-32 rounded-full border-4 border-dashed opacity-20", theme.border)}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <RefreshCw className={cn("w-12 h-12 animate-spin", theme.accent)} />
+                  </div>
+                </div>
+                <h2 className="text-6xl font-black italic uppercase tracking-tighter leading-none">
+                  Ждем <span className={theme.accent}>игрока</span>
+                </h2>
+                <p className={cn("text-sm font-black uppercase tracking-[0.4em] opacity-60", theme.muted)}>
+                  Переподключение...
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="text-8xl font-black tabular-nums tracking-tighter italic">
+                  {Math.max(0, Math.ceil(((room.pauseTimer || 0) - currentTime) / 1000))}
+                </div>
+                <div className={cn("w-full h-2 rounded-full overflow-hidden bg-white/5", theme.card)}>
+                  <motion.div 
+                    initial={{ width: "100%" }}
+                    animate={{ width: "0%" }}
+                    transition={{ duration: 20, ease: "linear" }}
+                    className={cn("h-full", theme.accentBg)}
+                  />
+                </div>
+              </div>
+
+              {room.host === peerRef.current?.id && currentTime > (room.pauseTimer || 0) && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="grid grid-cols-2 gap-6 pt-8"
+                >
+                  <button 
+                    onClick={continueGame}
+                    className="py-6 bg-white text-black rounded-3xl font-black uppercase tracking-widest text-xs hover:bg-zinc-200 transition-all shadow-xl"
+                  >
+                    Продолжить (без игрока)
+                  </button>
+                  <button 
+                    onClick={restartGame}
+                    className="py-6 bg-red-600 text-white rounded-3xl font-black uppercase tracking-widest text-xs hover:bg-red-500 transition-all shadow-xl shadow-red-900/40"
+                  >
+                    Начать заново
+                  </button>
+                </motion.div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
