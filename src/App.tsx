@@ -187,13 +187,18 @@ export default function App() {
         // Connect to any new players for media
         data.room.players.forEach((p: Player) => {
           if (p.id !== peerRef.current?.id && !peerStreamsRef.current[p.id] && !connectionsRef.current[p.id]) {
+            console.log('Connecting to new player:', p.name);
             const newConn = peerRef.current!.connect(p.id);
             connectionsRef.current[p.id] = newConn;
             handlePeerConnection(newConn, stream);
-            const call = peerRef.current!.call(p.id, stream);
-            call.on('stream', (remoteStream) => {
-              setPeerStreams(prev => ({ ...prev, [p.id]: remoteStream }));
-            });
+            
+            // Only the person with the "smaller" ID initiates the call to avoid double calls
+            if (peerRef.current!.id < p.id) {
+              const call = peerRef.current!.call(p.id, stream);
+              call.on('stream', (remoteStream) => {
+                setPeerStreams(prev => ({ ...prev, [p.id]: remoteStream }));
+              });
+            }
           }
         });
       }
@@ -214,7 +219,15 @@ export default function App() {
     if (!stream) return setIsConnecting(false);
 
     const shortId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const peer = new Peer(shortId);
+    const peer = new Peer(shortId, {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+        ]
+      }
+    });
     peerRef.current = peer;
 
     const randomFruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
@@ -269,7 +282,15 @@ export default function App() {
     const stream = await startMedia();
     if (!stream) return setIsConnecting(false);
 
-    const peer = new Peer();
+    const peer = new Peer(undefined, {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+        ]
+      }
+    });
     peerRef.current = peer;
 
     peer.on('open', (id) => {
