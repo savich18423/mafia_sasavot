@@ -5,7 +5,9 @@ import { cn } from './lib/utils';
 import { 
   User, Users, Play, LogIn, Plus, Shield, Heart, 
   Search, MessageSquare, Send, Copy, Check, Info, 
-  Moon, Sun, Vote, AlertCircle, Trophy, RefreshCw, LogOut
+  Moon, Sun, Vote, AlertCircle, Trophy, RefreshCw, LogOut,
+  Music, Volume2, VolumeX, SkipForward, SkipBack, Repeat, Trash2, PlusCircle, X, Settings,
+  Pause, Play as PlayIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
@@ -39,6 +41,23 @@ interface ChatMessage {
   timestamp: number;
 }
 
+interface MusicTrack {
+  id: string;
+  name: string;
+  data: string; // base64
+  suggestedBy?: string;
+  suggestedByName?: string;
+}
+
+interface MusicSettings {
+  volume: number;
+  loop: boolean;
+  isPlaying: boolean;
+  currentTrackId: string | null;
+  playlist: MusicTrack[];
+  suggestions: MusicTrack[];
+}
+
 interface Room {
   id: string;
   host: string;
@@ -60,6 +79,7 @@ interface Room {
   isPaused?: boolean;
   pausedBy?: string;
   pauseTimer?: number;
+  musicSettings: MusicSettings;
 }
 
 const FRUITS = [
@@ -103,6 +123,7 @@ export default function App() {
   const [playerName, setPlayerName] = useState('');
   const [roomId, setRoomId] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [peerStreams, setPeerStreams] = useState<Record<string, MediaStream>>({});
@@ -126,9 +147,186 @@ export default function App() {
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [copied, setCopied] = useState(false);
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const handleMusicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0] || !room) return;
+    const file = e.target.files[0];
+    if (file.size > 5 * 1024 * 1024) return toast.error('Файл слишком большой (макс. 5МБ)');
+    
+    try {
+      const base64 = await fileToBase64(file);
+      const isHost = room.host === peerRef.current?.id;
+      
+      if (isHost) {
+        const newTrack: MusicTrack = {
+          id: Math.random().toString(36).substring(2, 15),
+          name: file.name,
+          data: base64
+        };
+        const updatedRoom = {
+          ...room,
+          musicSettings: {
+            ...room.musicSettings,
+            playlist: [...room.musicSettings.playlist, newTrack]
+          }
+        };
+        broadcast(updatedRoom);
+        toast.success('Музыка добавлена в плейлист');
+      } else {
+        // Send suggestion to host
+        Object.values(connectionsRef.current).forEach((conn) => {
+          const c = conn as DataConnection;
+          if (c.peer === room.host && c.open) {
+            c.send({ 
+              type: 'SUGGEST_MUSIC', 
+              name: file.name, 
+              data: base64,
+              playerName: playerName
+            });
+          }
+        });
+        toast.success('Предложение отправлено хосту');
+      }
+    } catch (err) {
+      toast.error('Ошибка при загрузке файла');
+    }
+  };
+
+  const updateMusicSettings = (settings: Partial<MusicSettings>) => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    const updatedRoom = {
+      ...room,
+      musicSettings: {
+        ...room.musicSettings,
+        ...settings
+      }
+    };
+    broadcast(updatedRoom);
+  };
+
+  const acceptMusic = (trackId: string) => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    const track = room.musicSettings.suggestions.find(t => t.id === trackId);
+    if (!track) return;
+
+    const updatedRoom = {
+      ...room,
+      musicSettings: {
+        ...room.musicSettings,
+        suggestions: room.musicSettings.suggestions.filter(t => t.id !== trackId),
+        playlist: [...room.musicSettings.playlist, track]
+      },
+      logs: [{ message: `Принята музыка: ${track.name}`, type: 'success', timestamp: Date.now() }, ...room.logs]
+    };
+    broadcast(updatedRoom);
+  };
+
+  const declineMusic = (trackId: string) => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    const updatedRoom = {
+      ...room,
+      musicSettings: {
+        ...room.musicSettings,
+        suggestions: room.musicSettings.suggestions.filter(t => t.id !== trackId)
+      }
+    };
+    broadcast(updatedRoom);
+  };
+
+  const removeMusic = (trackId: string) => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    const updatedRoom = {
+      ...room,
+      musicSettings: {
+        ...room.musicSettings,
+        playlist: room.musicSettings.playlist.filter(t => t.id !== trackId),
+        currentTrackId: room.musicSettings.currentTrackId === trackId ? null : room.musicSettings.currentTrackId,
+        isPlaying: room.musicSettings.currentTrackId === trackId ? false : room.musicSettings.isPlaying
+      }
+    };
+    broadcast(updatedRoom);
+  };
+
+  const MusicPlayer = () => {
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const [isAudioBlocked, setIsAudioBlocked] = useState(false);
+    const { musicSettings } = room!;
+
+    useEffect(() => {
+      if (audioRef.current) {
+        audioRef.current.volume = musicSettings.volume;
+        audioRef.current.loop = musicSettings.loop;
+        
+        if (musicSettings.isPlaying) {
+          audioRef.current.play().catch(e => {
+            console.error("Audio play error:", e);
+            if (e.name === 'NotAllowedError') {
+              setIsAudioBlocked(true);
+            }
+          });
+        } else {
+          audioRef.current.pause();
+        }
+      }
+    }, [musicSettings.isPlaying, musicSettings.volume, musicSettings.loop, musicSettings.currentTrackId]);
+
+    const currentTrack = musicSettings.playlist.find(t => t.id === musicSettings.currentTrackId);
+
+    return (
+      <>
+        <audio 
+          ref={audioRef} 
+          key={musicSettings.currentTrackId}
+          src={currentTrack?.data} 
+          onEnded={() => {
+            if (!musicSettings.loop && room!.host === peerRef.current?.id) {
+              const currentIndex = musicSettings.playlist.findIndex(t => t.id === musicSettings.currentTrackId);
+              const nextIndex = (currentIndex + 1) % musicSettings.playlist.length;
+              const nextTrack = musicSettings.playlist[nextIndex];
+              if (nextTrack) {
+                updateMusicSettings({ currentTrackId: nextTrack.id, isPlaying: true });
+              } else {
+                updateMusicSettings({ isPlaying: false });
+              }
+            }
+          }}
+        />
+        {isAudioBlocked && musicSettings.isPlaying && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100]"
+          >
+            <button
+              onClick={() => {
+                setIsAudioBlocked(false);
+                audioRef.current?.play().catch(console.error);
+              }}
+              className={cn(
+                "flex items-center gap-3 px-6 py-3 rounded-full font-bold uppercase tracking-wider text-sm shadow-2xl border animate-bounce",
+                theme.accentBg,
+                theme.border
+              )}
+            >
+              <Volume2 className="w-5 h-5" />
+              Включить звук музыки
+            </button>
+          </motion.div>
+        )}
+      </>
+    );
+  };
   const [activeTab, setActiveTab] = useState<'chat' | 'logs'>('chat');
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showMusicSettings, setShowMusicSettings] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const roomRef = useRef<Room | null>(null);
 
@@ -397,6 +595,7 @@ export default function App() {
       
       if (data.type === 'ROOM_UPDATE') {
         setRoom(data.room);
+        setIsConnecting(false);
         // Connect to any new players for media
         data.room.players.forEach((p: Player) => {
           if (p.id !== peerRef.current?.id && !peerStreamsRef.current[p.id] && !connectionsRef.current[p.id]) {
@@ -449,6 +648,81 @@ export default function App() {
         const currentRoom = roomRef.current;
         if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
         restartGame();
+      }
+
+      // --- Music Messages ---
+      if (data.type === 'SUGGEST_MUSIC') {
+        const currentRoom = roomRef.current;
+        if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
+        
+        const newTrack: MusicTrack = {
+          id: Math.random().toString(36).substring(2, 15),
+          name: data.name,
+          data: data.data,
+          suggestedBy: conn.peer,
+          suggestedByName: data.playerName
+        };
+
+        const updatedRoom = {
+          ...currentRoom,
+          musicSettings: {
+            ...currentRoom.musicSettings,
+            suggestions: [...currentRoom.musicSettings.suggestions, newTrack]
+          },
+          logs: [{ message: `${data.playerName} предложил музыку: ${data.name}`, type: 'info', timestamp: Date.now() }, ...currentRoom.logs]
+        };
+        broadcast(updatedRoom);
+        toast.info(`Новое предложение музыки от ${data.playerName}`);
+      }
+
+      if (data.type === 'ACCEPT_MUSIC') {
+        const currentRoom = roomRef.current;
+        if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
+        
+        const track = currentRoom.musicSettings.suggestions.find(t => t.id === data.trackId);
+        if (!track) return;
+
+        const updatedRoom = {
+          ...currentRoom,
+          musicSettings: {
+            ...currentRoom.musicSettings,
+            suggestions: currentRoom.musicSettings.suggestions.filter(t => t.id !== data.trackId),
+            playlist: [...currentRoom.musicSettings.playlist, track]
+          },
+          logs: [{ message: `Принята музыка: ${track.name}`, type: 'success', timestamp: Date.now() }, ...currentRoom.logs]
+        };
+        broadcast(updatedRoom);
+      }
+
+      if (data.type === 'DECLINE_MUSIC') {
+        const currentRoom = roomRef.current;
+        if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
+        
+        const track = currentRoom.musicSettings.suggestions.find(t => t.id === data.trackId);
+        if (!track) return;
+
+        const updatedRoom = {
+          ...currentRoom,
+          musicSettings: {
+            ...currentRoom.musicSettings,
+            suggestions: currentRoom.musicSettings.suggestions.filter(t => t.id !== data.trackId)
+          }
+        };
+        broadcast(updatedRoom);
+      }
+
+      if (data.type === 'UPDATE_MUSIC_SETTINGS') {
+        const currentRoom = roomRef.current;
+        if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
+        
+        const updatedRoom = {
+          ...currentRoom,
+          musicSettings: {
+            ...currentRoom.musicSettings,
+            ...data.settings
+          }
+        };
+        broadcast(updatedRoom);
       }
 
       if (data.type === 'GAME_CONTINUE') {
@@ -543,7 +817,15 @@ export default function App() {
         detectiveResults: {},
         lastVotes: {},
         logs: [{ message: 'Комната создана. Ожидание игроков...', type: 'system', timestamp: Date.now() }],
-        winner: null
+        winner: null,
+        musicSettings: {
+          volume: 0.5,
+          loop: true,
+          isPlaying: false,
+          currentTrackId: null,
+          playlist: [],
+          suggestions: []
+        }
       };
       initialRoom.players[0].sessionToken = sessionToken;
       setRoom(initialRoom);
@@ -707,6 +989,8 @@ export default function App() {
     setPeerStreams({});
     connectionsRef.current = {};
     peerStreamsRef.current = {};
+    setIsJoining(false);
+    setIsConnecting(false);
   };
 
   const restartGame = () => {
@@ -1665,6 +1949,25 @@ export default function App() {
               )} />
               <span className="text-xs font-black tracking-widest uppercase">{STATUS_NAMES[room.status]}</span>
             </div>
+
+            <div className="h-10 w-px bg-white/10" />
+            
+            {/* Music Controller in Header */}
+            <div className={cn("flex items-center gap-4 px-5 py-2.5 rounded-2xl border shadow-inner group transition-colors", theme.card, theme.border)}>
+              <Music className={cn("w-4 h-4", room.musicSettings.isPlaying ? "text-indigo-400 animate-pulse" : theme.muted)} />
+              <div className="flex flex-col min-w-[100px]">
+                <span className={cn("text-[8px] font-black tracking-[0.2em] uppercase", theme.muted)}>Музыка</span>
+                <span className="text-[10px] font-bold truncate max-w-[120px]">
+                  {room.musicSettings.playlist.find(t => t.id === room.musicSettings.currentTrackId)?.name || 'Тишина'}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowMusicSettings(true)}
+                className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+              >
+                <Settings className="w-3 h-3 opacity-50 hover:opacity-100" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2048,6 +2351,215 @@ export default function App() {
               )}
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {room && <MusicPlayer />}
+
+      {/* Music Settings Modal */}
+      <AnimatePresence>
+        {showMusicSettings && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMusicSettings(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={cn("relative w-full max-w-2xl rounded-[3rem] border shadow-2xl overflow-hidden flex flex-col max-h-[80vh]", theme.card, theme.border)}
+            >
+              <div className={cn("p-10 border-b flex items-center justify-between", theme.border)}>
+                <div className="flex items-center gap-4">
+                  <div className={cn("p-3 rounded-2xl", theme.accentBg)}>
+                    <Music className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter">Настройки Музыки</h2>
+                    <p className={cn("text-xs font-bold uppercase tracking-widest opacity-50", theme.muted)}>Управление атмосферой игры</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowMusicSettings(false)}
+                  className="p-4 hover:bg-white/10 rounded-2xl transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
+                {/* Controls for Host */}
+                {room.host === peerRef.current?.id ? (
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <label className={cn("text-xs font-black uppercase tracking-widest opacity-50", theme.muted)}>Громкость</label>
+                        <div className={cn("flex items-center gap-4 p-4 rounded-2xl border", theme.card, theme.border)}>
+                          {room.musicSettings.volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="1" 
+                            step="0.01" 
+                            value={room.musicSettings.volume}
+                            onChange={(e) => updateMusicSettings({ volume: parseFloat(e.target.value) })}
+                            className={cn("flex-1 accent-orange-500")}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <label className={cn("text-xs font-black uppercase tracking-widest opacity-50", theme.muted)}>Повтор</label>
+                        <button 
+                          onClick={() => updateMusicSettings({ loop: !room.musicSettings.loop })}
+                          className={cn(
+                            "w-full flex items-center justify-center gap-3 p-4 rounded-2xl border transition-all font-bold uppercase text-xs tracking-widest",
+                            room.musicSettings.loop ? "bg-orange-600 border-orange-500 text-white" : cn(theme.card, theme.border, "opacity-50")
+                          )}
+                        >
+                          <Repeat className="w-4 h-4" />
+                          {room.musicSettings.loop ? 'Включен' : 'Выключен'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <label className={cn("text-xs font-black uppercase tracking-widest opacity-50", theme.muted)}>Плейлист</label>
+                        <label className="cursor-pointer flex items-center gap-2 text-xs font-black uppercase tracking-widest text-orange-500 hover:text-orange-400 transition-colors">
+                          <PlusCircle className="w-4 h-4" />
+                          Добавить файл
+                          <input type="file" accept="audio/*" className="hidden" onChange={handleMusicUpload} />
+                        </label>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {room.musicSettings.playlist.length === 0 ? (
+                          <div className={cn("py-10 text-center border-2 border-dashed rounded-3xl opacity-30", theme.border)}>
+                            <p className="text-sm font-bold uppercase tracking-widest">Плейлист пуст</p>
+                          </div>
+                        ) : (
+                          room.musicSettings.playlist.map((track) => (
+                            <div 
+                              key={track.id}
+                              className={cn(
+                                "flex items-center justify-between p-4 rounded-2xl border transition-all",
+                                room.musicSettings.currentTrackId === track.id ? "bg-orange-500/20 border-orange-500/50" : cn(theme.card, theme.border)
+                              )}
+                            >
+                              <div className="flex items-center gap-4 overflow-hidden">
+                                <button 
+                                  onClick={() => {
+                                    if (room.musicSettings.currentTrackId === track.id) {
+                                      updateMusicSettings({ isPlaying: !room.musicSettings.isPlaying });
+                                    } else {
+                                      updateMusicSettings({ currentTrackId: track.id, isPlaying: true });
+                                    }
+                                  }}
+                                  className="p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-colors"
+                                >
+                                  {room.musicSettings.currentTrackId === track.id && room.musicSettings.isPlaying ? <Pause className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
+                                </button>
+                                <div className="truncate">
+                                  <p className="font-bold text-sm truncate">{track.name}</p>
+                                  {track.suggestedByName && <p className={cn("text-[10px] opacity-40 uppercase font-black", theme.muted)}>От: {track.suggestedByName}</p>}
+                                </div>
+                              </div>
+                              <button 
+                                onClick={() => removeMusic(track.id)}
+                                className="p-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {room.musicSettings.suggestions.length > 0 && (
+                      <div className="space-y-4">
+                        <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70">Предложения от игроков</label>
+                        <div className="space-y-2">
+                          {room.musicSettings.suggestions.map((track) => (
+                            <div key={track.id} className="flex items-center justify-between p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl">
+                              <div className="truncate">
+                                <p className="font-bold text-sm truncate">{track.name}</p>
+                                <p className={cn("text-[10px] opacity-40 uppercase font-black", theme.muted)}>От: {track.suggestedByName}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  onClick={() => acceptMusic(track.id)}
+                                  className="p-3 bg-green-500/20 text-green-400 hover:bg-green-500/30 rounded-xl transition-colors"
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => declineMusic(track.id)}
+                                  className="p-3 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-xl transition-colors"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // View for Players
+                  <div className="space-y-8">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <label className={cn("text-xs font-black uppercase tracking-widest opacity-50", theme.muted)}>Плейлист</label>
+                        <label className="cursor-pointer flex items-center gap-2 text-xs font-black uppercase tracking-widest text-orange-500 hover:text-orange-400 transition-colors">
+                          <PlusCircle className="w-4 h-4" />
+                          Предложить музыку
+                          <input type="file" accept="audio/*" className="hidden" onChange={handleMusicUpload} />
+                        </label>
+                      </div>
+                      <div className="space-y-2">
+                        {room.musicSettings.playlist.length === 0 ? (
+                          <div className={cn("py-10 text-center border-2 border-dashed rounded-3xl opacity-30", theme.border)}>
+                            <p className="text-sm font-bold uppercase tracking-widest">Плейлист пуст</p>
+                          </div>
+                        ) : (
+                          room.musicSettings.playlist.map((track) => (
+                            <div 
+                              key={track.id}
+                              className={cn(
+                                "flex items-center gap-4 p-4 rounded-2xl border transition-all",
+                                room.musicSettings.currentTrackId === track.id ? "bg-orange-500/20 border-orange-500/50" : cn(theme.card, theme.border)
+                              )}
+                            >
+                              <div className="p-3 bg-white/10 rounded-xl">
+                                <Music className="w-4 h-4" />
+                              </div>
+                              <div className="truncate">
+                                <p className="font-bold text-sm truncate">{track.name}</p>
+                                {track.suggestedByName && <p className={cn("text-[10px] opacity-40 uppercase font-black", theme.muted)}>От: {track.suggestedByName}</p>}
+                              </div>
+                              {room.musicSettings.currentTrackId === track.id && room.musicSettings.isPlaying && (
+                                <div className="ml-auto flex gap-1">
+                                  <motion.div animate={{ height: [4, 12, 4] }} transition={{ repeat: Infinity, duration: 0.5 }} className="w-1 bg-orange-400" />
+                                  <motion.div animate={{ height: [8, 4, 8] }} transition={{ repeat: Infinity, duration: 0.5, delay: 0.1 }} className="w-1 bg-orange-400" />
+                                  <motion.div animate={{ height: [12, 8, 12] }} transition={{ repeat: Infinity, duration: 0.5, delay: 0.2 }} className="w-1 bg-orange-400" />
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
