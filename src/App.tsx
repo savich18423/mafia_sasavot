@@ -230,17 +230,84 @@ export default function App() {
   useEffect(() => {
     const savedRoomId = localStorage.getItem('mafia_room_id');
     const savedName = localStorage.getItem('mafia_player_name');
+    const savedIsHost = localStorage.getItem('mafia_is_host') === 'true';
+    const savedRoom = localStorage.getItem('mafia_room_state');
+
     if (savedRoomId && savedName && !room) {
       setRoomId(savedRoomId);
       setPlayerName(savedName);
-      // Auto-join could be implemented here if desired
+      
+      // If was host, try to recover room
+      if (savedIsHost && savedRoom) {
+        try {
+          const recoveredRoom = JSON.parse(savedRoom) as Room;
+          // We need to re-initialize as host
+          recoverRoomAsHost(recoveredRoom, savedName);
+        } catch (e) {
+          console.error("Failed to recover room state", e);
+        }
+      } else {
+        // If was player, try to auto-rejoin
+        autoRejoin(savedRoomId, savedName);
+      }
     }
   }, []);
+
+  const recoverRoomAsHost = async (recoveredRoom: Room, name: string) => {
+    setIsConnecting(true);
+    const stream = await startMedia();
+    if (!stream) return setIsConnecting(false);
+
+    const peer = new Peer(recoveredRoom.id, {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+        ]
+      }
+    });
+    peerRef.current = peer;
+
+    peer.on('open', (id) => {
+      // Mark host as connected
+      const updatedPlayers = recoveredRoom.players.map(p => 
+        p.id === recoveredRoom.host ? { ...p, isDisconnected: false, disconnectTime: undefined } : p
+      );
+      const updatedRoom = { ...recoveredRoom, players: updatedPlayers };
+      setRoom(updatedRoom);
+      setIsConnecting(false);
+      toast.success('Комната восстановлена!');
+    });
+
+    peer.on('connection', (conn) => {
+      connectionsRef.current[conn.peer] = conn;
+      handlePeerConnection(conn, stream);
+    });
+
+    peer.on('call', (call) => {
+      call.answer(stream);
+      call.on('stream', (remoteStream) => {
+        setPeerStreams(prev => ({ ...prev, [call.peer]: remoteStream }));
+      });
+    });
+  };
+
+  const autoRejoin = async (rId: string, name: string) => {
+    setRoomId(rId);
+    setPlayerName(name);
+    // We don't auto-join immediately to avoid annoying the user if they just wanted to browse
+    // But we could if we wanted to. Let's just set the fields for now.
+  };
 
   useEffect(() => {
     if (room) {
       localStorage.setItem('mafia_room_id', room.id);
       localStorage.setItem('mafia_player_name', playerName);
+      localStorage.setItem('mafia_is_host', (room.host === peerRef.current?.id).toString());
+      if (room.host === peerRef.current?.id) {
+        localStorage.setItem('mafia_room_state', JSON.stringify(room));
+      }
     }
   }, [room, playerName]);
 
@@ -368,26 +435,37 @@ export default function App() {
 
     conn.on('close', () => {
       const currentRoom = roomRef.current;
-      if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
+      if (!currentRoom) return;
       
       const player = currentRoom.players.find(p => p.id === conn.peer);
       if (!player) return;
 
-      // Mark as disconnected
-      const updatedPlayers = currentRoom.players.map(p => 
-        p.id === conn.peer ? { ...p, isDisconnected: true, disconnectTime: Date.now() } : p
-      );
+      // If I'm the host, handle the disconnection
+      if (currentRoom.host === peerRef.current?.id) {
+        // Mark as disconnected
+        const updatedPlayers = currentRoom.players.map(p => 
+          p.id === conn.peer ? { ...p, isDisconnected: true, disconnectTime: Date.now() } : p
+        );
 
-      let updatedRoom = { ...currentRoom, players: updatedPlayers };
+        let updatedRoom = { ...currentRoom, players: updatedPlayers };
 
-      if (currentRoom.status === 'playing' && !currentRoom.isPaused) {
-        updatedRoom.isPaused = true;
-        updatedRoom.pausedBy = player.id;
-        updatedRoom.pauseTimer = Date.now();
-        updatedRoom.logs = [{ message: `${player.name} отключился. Ожидание 20 секунд...`, type: 'danger', timestamp: Date.now() }, ...updatedRoom.logs];
+        if (currentRoom.status === 'playing' && !currentRoom.isPaused) {
+          updatedRoom.isPaused = true;
+          updatedRoom.pausedBy = player.id;
+          updatedRoom.pauseTimer = Date.now();
+          updatedRoom.logs = [{ message: `${player.name} отключился. Ожидание 20 секунд...`, type: 'danger', timestamp: Date.now() }, ...updatedRoom.logs];
+        }
+
+        broadcast(updatedRoom);
+      } else if (conn.peer === currentRoom.host) {
+        // If host disconnected, try to reconnect after a delay
+        toast.error('Хост отключился. Пытаемся переподключиться...');
+        setTimeout(() => {
+          if (roomRef.current && !roomRef.current.isDisconnected) {
+            joinRoom();
+          }
+        }, 3000);
       }
-
-      broadcast(updatedRoom);
     });
   };
 
@@ -1171,43 +1249,6 @@ export default function App() {
               
               {!isJoining ? (
                 <div className="space-y-12 relative z-10">
-                  {/* Camera Preview Section */}
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between px-2">
-                      <label className={cn("text-[10px] uppercase tracking-[0.5em] font-black", theme.muted)}>Проверка камеры</label>
-                      <button 
-                        onClick={togglePreview}
-                        className={cn(
-                          "text-[10px] uppercase font-black transition-colors flex items-center gap-2 group",
-                          isPreviewing ? "text-red-500 hover:text-red-400" : theme.accent
-                        )}
-                      >
-                        {isPreviewing ? 'Выключить' : 'Включить предпросмотр'}
-                        <RefreshCw className={cn("w-3 h-3 transition-transform duration-500", isPreviewing && "animate-spin")} />
-                      </button>
-                    </div>
-                    
-                    <div className={cn("aspect-video bg-black/60 rounded-[2rem] border overflow-hidden relative group", theme.border)}>
-                      {isPreviewing && localStream ? (
-                        <FruitFace 
-                          stream={localStream} 
-                          fruitType="orange" 
-                          isLocal={true} 
-                          playerName="Предпросмотр" 
-                          theme={theme}
-                          scale={1.5}
-                        />
-                      ) : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
-                          <div className={cn("w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border", theme.border)}>
-                            <RefreshCw className={cn("w-8 h-8", theme.muted)} />
-                          </div>
-                          <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Камера выключена</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
                   <div className="space-y-6">
                     <div className="flex items-center justify-between px-2">
                       <label className={cn("text-[10px] uppercase tracking-[0.5em] font-black", theme.muted)}>Личность игрока</label>
@@ -1227,46 +1268,6 @@ export default function App() {
                         onChange={(e) => setPlayerName(e.target.value)}
                       />
                     </div>
-
-                    {cameras.length > 0 && (
-                      <div className="space-y-4">
-                        <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500 px-2">Выберите камеру (Snap Camera)</label>
-                        <div className="relative group">
-                          <div className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center group-focus-within:bg-orange-500/20 transition-all duration-500">
-                            <RefreshCw className="w-5 h-5 text-zinc-500 group-focus-within:text-orange-500 transition-colors" />
-                          </div>
-                          <select
-                            value={selectedCameraId}
-                            onChange={async (e) => {
-                              const newId = e.target.value;
-                              setSelectedCameraId(newId);
-                              if (isPreviewing) {
-                                if (localStream) {
-                                  localStream.getTracks().forEach(t => t.stop());
-                                }
-                                const constraints = { 
-                                  video: { deviceId: { exact: newId } }, 
-                                  audio: true 
-                                };
-                                try {
-                                  const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                                  setLocalStream(stream);
-                                } catch (err) {
-                                  console.error("Error switching preview camera:", err);
-                                }
-                              }
-                            }}
-                            className="w-full bg-black/60 border border-white/10 rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:border-orange-500/50 focus:ring-4 focus:ring-orange-500/10 transition-all text-xs font-black tracking-[0.1em] uppercase text-white appearance-none cursor-pointer"
-                          >
-                            {cameras.map((camera) => (
-                              <option key={camera.deviceId} value={camera.deviceId} className="bg-zinc-900 text-white">
-                                {camera.label || `Камера ${camera.deviceId.slice(0, 5)}`}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div className="grid gap-6">
@@ -1317,43 +1318,6 @@ export default function App() {
                   transition={{ duration: 0.6, ease: "circOut" }}
                   className="space-y-12 relative z-10"
                 >
-                  {/* Camera Preview Section for Joining */}
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between px-2">
-                      <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500">Проверка камеры</label>
-                      <button 
-                        onClick={togglePreview}
-                        className={cn(
-                          "text-[10px] uppercase font-black transition-colors flex items-center gap-2 group",
-                          isPreviewing ? "text-red-500 hover:text-red-400" : "text-orange-500 hover:text-orange-400"
-                        )}
-                      >
-                        {isPreviewing ? 'Выключить' : 'Включить предпросмотр'}
-                        <RefreshCw className={cn("w-3 h-3 transition-transform duration-500", isPreviewing && "animate-spin")} />
-                      </button>
-                    </div>
-                    
-                    <div className={cn("aspect-video bg-black/60 rounded-[2rem] border overflow-hidden relative group", theme.border)}>
-                      {isPreviewing && localStream ? (
-                        <FruitFace 
-                          stream={localStream} 
-                          fruitType="orange" 
-                          isLocal={true} 
-                          playerName="Предпросмотр" 
-                          theme={theme}
-                          scale={1.5}
-                        />
-                      ) : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
-                          <div className={cn("w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border", theme.border)}>
-                            <RefreshCw className={cn("w-8 h-8", theme.muted)} />
-                          </div>
-                          <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Камера выключена</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
                   <div className="space-y-6">
                     <div className="flex justify-between items-center px-2">
                       <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500">Код сессии</label>
@@ -1393,46 +1357,6 @@ export default function App() {
                         onChange={(e) => setPlayerName(e.target.value)}
                       />
                     </div>
-
-                    {cameras.length > 0 && (
-                      <div className="space-y-4">
-                        <label className="text-[10px] uppercase tracking-[0.5em] font-black text-zinc-500 px-2">Выберите камеру (Snap Camera)</label>
-                        <div className="relative group">
-                          <div className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center group-focus-within:bg-orange-500/20 transition-all duration-500">
-                            <RefreshCw className="w-5 h-5 text-zinc-500 group-focus-within:text-orange-500 transition-colors" />
-                          </div>
-                          <select
-                            value={selectedCameraId}
-                            onChange={async (e) => {
-                              const newId = e.target.value;
-                              setSelectedCameraId(newId);
-                              if (isPreviewing) {
-                                if (localStream) {
-                                  localStream.getTracks().forEach(t => t.stop());
-                                }
-                                const constraints = { 
-                                  video: { deviceId: { exact: newId } }, 
-                                  audio: true 
-                                };
-                                try {
-                                  const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                                  setLocalStream(stream);
-                                } catch (err) {
-                                  console.error("Error switching preview camera:", err);
-                                }
-                              }
-                            }}
-                            className="w-full bg-black/60 border border-white/10 rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:border-orange-500/50 focus:ring-4 focus:ring-orange-500/10 transition-all text-xs font-black tracking-[0.1em] uppercase text-white appearance-none cursor-pointer"
-                          >
-                            {cameras.map((camera) => (
-                              <option key={camera.deviceId} value={camera.deviceId} className="bg-zinc-900 text-white">
-                                {camera.label || `Камера ${camera.deviceId.slice(0, 5)}`}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <motion.button
@@ -1723,6 +1647,7 @@ export default function App() {
                       me?.role === 'detective' && room.detectiveResults[player.id] === 'citizen' ? 'investigated_citizen' :
                       null
                     }
+                    scale={1.5}
                   />
                   
                   {/* Action Button Overlay */}
@@ -1994,16 +1919,16 @@ export default function App() {
                   </div>
                 </div>
                 <h2 className="text-6xl font-black italic uppercase tracking-tighter leading-none">
-                  Ждем <span className={theme.accent}>игрока</span>
+                  Ждем <span className={theme.accent}>{room.players.find(p => p.id === room.pausedBy)?.name || 'игрока'}</span>
                 </h2>
                 <p className={cn("text-sm font-black uppercase tracking-[0.4em] opacity-60", theme.muted)}>
-                  Переподключение...
+                  Ожидание переподключения...
                 </p>
               </div>
 
               <div className="space-y-4">
                 <div className="text-8xl font-black tabular-nums tracking-tighter italic">
-                  {Math.max(0, Math.ceil(((room.pauseTimer || 0) - currentTime) / 1000))}
+                  {Math.max(0, Math.ceil((20000 - (currentTime - (room.pauseTimer || 0))) / 1000))}
                 </div>
                 <div className={cn("w-full h-2 rounded-full overflow-hidden bg-white/5", theme.card)}>
                   <motion.div 
@@ -2015,7 +1940,7 @@ export default function App() {
                 </div>
               </div>
 
-              {room.host === peerRef.current?.id && currentTime > (room.pauseTimer || 0) && (
+              {room.host === peerRef.current?.id && currentTime > (room.pauseTimer || 0) + 20000 && (
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
