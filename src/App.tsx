@@ -409,6 +409,29 @@ export default function App() {
         setIsConnecting(false);
       }
 
+      if (data.type === 'PLAYER_LEFT_INTENTIONALLY') {
+        const currentRoom = roomRef.current;
+        if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
+        
+        const player = currentRoom.players.find(p => p.id === data.playerId);
+        if (!player) return;
+
+        const updatedPlayers = currentRoom.players.filter(p => p.id !== data.playerId);
+        const updatedRoom = {
+          ...currentRoom,
+          players: updatedPlayers,
+          logs: [{ message: `${player.name} покинул игру`, type: 'info', timestamp: Date.now() }, ...currentRoom.logs]
+        };
+        
+        if (updatedRoom.isPaused && updatedRoom.pausedBy === data.playerId) {
+          updatedRoom.isPaused = false;
+          updatedRoom.pausedBy = undefined;
+          updatedRoom.pauseTimer = undefined;
+        }
+
+        broadcast(updatedRoom);
+      }
+
       if (data.type === 'GAME_RESTART') {
         const currentRoom = roomRef.current;
         if (!currentRoom || currentRoom.host !== peerRef.current?.id) return;
@@ -438,7 +461,10 @@ export default function App() {
       if (!currentRoom) return;
       
       const player = currentRoom.players.find(p => p.id === conn.peer);
-      if (!player) return;
+      if (!player) {
+        // Player might have already been removed intentionally
+        return;
+      }
 
       // If I'm the host, handle the disconnection
       if (currentRoom.host === peerRef.current?.id) {
@@ -634,6 +660,37 @@ export default function App() {
       logs: [{ message: 'Игра продолжена без одного игрока', type: 'info', timestamp: Date.now() }, ...room.logs]
     };
     broadcast(updatedRoom);
+  };
+
+  const leaveRoom = () => {
+    if (!room || !peerRef.current) return;
+    
+    if (room.host !== peerRef.current.id) {
+      const hostConn = connectionsRef.current[room.host];
+      if (hostConn && hostConn.open) {
+        hostConn.send({ type: 'PLAYER_LEFT_INTENTIONALLY', playerId: peerRef.current.id });
+      }
+    }
+
+    localStorage.removeItem('mafia_room_id');
+    localStorage.removeItem('mafia_player_name');
+    localStorage.removeItem('mafia_is_host');
+    localStorage.removeItem('mafia_room_state');
+    
+    if (peerRef.current) {
+      peerRef.current.destroy();
+      peerRef.current = null;
+    }
+    
+    if (localStream) {
+      localStream.getTracks().forEach(t => t.stop());
+      setLocalStream(null);
+    }
+    
+    setRoom(null);
+    setPeerStreams({});
+    connectionsRef.current = {};
+    peerStreamsRef.current = {};
   };
 
   const restartGame = () => {
@@ -1603,7 +1660,7 @@ export default function App() {
             </button>
             
             <button 
-              onClick={() => window.location.reload()}
+              onClick={leaveRoom}
               className={cn("w-12 h-12 flex items-center justify-center transition-all rounded-2xl border active:scale-95", theme.card, theme.border, "hover:bg-red-900/40 text-zinc-600 hover:text-red-500")}
               title="Покинуть комнату"
             >
