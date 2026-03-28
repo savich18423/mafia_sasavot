@@ -174,8 +174,15 @@ export default function App() {
         const updatedRoom = {
           ...room,
           musicSettings: {
-            ...room.musicSettings,
-            playlist: [...room.musicSettings.playlist, newTrack]
+            ...(room.musicSettings || {
+              playlist: [],
+              suggestions: [],
+              currentTrackId: null,
+              isPlaying: false,
+              volume: 0.5,
+              loop: false
+            }),
+            playlist: [...(room.musicSettings?.playlist || []), newTrack]
           }
         };
         broadcast(updatedRoom);
@@ -201,7 +208,7 @@ export default function App() {
   };
 
   const updateMusicSettings = (settings: Partial<MusicSettings>) => {
-    if (!room || room.host !== peerRef.current?.id) return;
+    if (!room || room.host !== peerRef.current?.id || !room.musicSettings) return;
     const updatedRoom = {
       ...room,
       musicSettings: {
@@ -213,7 +220,7 @@ export default function App() {
   };
 
   const acceptMusic = (trackId: string) => {
-    if (!room || room.host !== peerRef.current?.id) return;
+    if (!room || room.host !== peerRef.current?.id || !room.musicSettings) return;
     const track = room.musicSettings.suggestions.find(t => t.id === trackId);
     if (!track) return;
 
@@ -230,7 +237,7 @@ export default function App() {
   };
 
   const declineMusic = (trackId: string) => {
-    if (!room || room.host !== peerRef.current?.id) return;
+    if (!room || room.host !== peerRef.current?.id || !room.musicSettings) return;
     const updatedRoom = {
       ...room,
       musicSettings: {
@@ -242,7 +249,7 @@ export default function App() {
   };
 
   const removeMusic = (trackId: string) => {
-    if (!room || room.host !== peerRef.current?.id) return;
+    if (!room || room.host !== peerRef.current?.id || !room.musicSettings) return;
     const updatedRoom = {
       ...room,
       musicSettings: {
@@ -255,10 +262,30 @@ export default function App() {
     broadcast(updatedRoom);
   };
 
+  // Migration: Ensure musicSettings exists when room is updated
+  useEffect(() => {
+    if (room && (!room.musicSettings || !room.musicSettings.playlist || !room.musicSettings.suggestions)) {
+      const updatedRoom = {
+        ...room,
+        musicSettings: {
+          playlist: room.musicSettings?.playlist || [],
+          suggestions: room.musicSettings?.suggestions || [],
+          currentTrackId: room.musicSettings?.currentTrackId || null,
+          isPlaying: room.musicSettings?.isPlaying || false,
+          volume: room.musicSettings?.volume ?? 0.5,
+          loop: room.musicSettings?.loop || false
+        }
+      };
+      setRoom(updatedRoom);
+    }
+  }, [room]);
+
   const MusicPlayer = () => {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [isAudioBlocked, setIsAudioBlocked] = useState(false);
-    const { musicSettings } = room!;
+    
+    if (!room?.musicSettings) return null;
+    const { musicSettings } = room;
 
     useEffect(() => {
       if (audioRef.current) {
@@ -288,9 +315,9 @@ export default function App() {
           src={currentTrack?.data} 
           onEnded={() => {
             if (!musicSettings.loop && room!.host === peerRef.current?.id) {
-              const currentIndex = musicSettings.playlist.findIndex(t => t.id === musicSettings.currentTrackId);
-              const nextIndex = (currentIndex + 1) % musicSettings.playlist.length;
-              const nextTrack = musicSettings.playlist[nextIndex];
+              const currentIndex = musicSettings.playlist?.findIndex(t => t.id === musicSettings.currentTrackId) ?? -1;
+              const nextIndex = (currentIndex + 1) % (musicSettings.playlist?.length || 1);
+              const nextTrack = musicSettings.playlist?.[nextIndex];
               if (nextTrack) {
                 updateMusicSettings({ currentTrackId: nextTrack.id, isPlaying: true });
               } else {
@@ -451,6 +478,19 @@ export default function App() {
       if (savedIsHost && savedRoom) {
         try {
           const recoveredRoom = JSON.parse(savedRoom) as Room;
+          
+          // Migration: Ensure musicSettings exists
+          if (!recoveredRoom.musicSettings) {
+            recoveredRoom.musicSettings = {
+              volume: 0.5,
+              loop: true,
+              isPlaying: false,
+              currentTrackId: null,
+              playlist: [],
+              suggestions: []
+            };
+          }
+          
           // We need to re-initialize as host
           recoverRoomAsHost(recoveredRoom, savedName);
         } catch (e) {
@@ -1954,11 +1994,11 @@ export default function App() {
             
             {/* Music Controller in Header */}
             <div className={cn("flex items-center gap-4 px-5 py-2.5 rounded-2xl border shadow-inner group transition-colors", theme.card, theme.border)}>
-              <Music className={cn("w-4 h-4", room.musicSettings.isPlaying ? "text-indigo-400 animate-pulse" : theme.muted)} />
+              <Music className={cn("w-4 h-4", room.musicSettings?.isPlaying ? "text-indigo-400 animate-pulse" : theme.muted)} />
               <div className="flex flex-col min-w-[100px]">
                 <span className={cn("text-[8px] font-black tracking-[0.2em] uppercase", theme.muted)}>Музыка</span>
                 <span className="text-[10px] font-bold truncate max-w-[120px]">
-                  {room.musicSettings.playlist.find(t => t.id === room.musicSettings.currentTrackId)?.name || 'Тишина'}
+                  {room.musicSettings?.playlist?.find(t => t.id === room.musicSettings?.currentTrackId)?.name || 'Тишина'}
                 </span>
               </div>
               <button
@@ -2399,13 +2439,13 @@ export default function App() {
                       <div className="space-y-4">
                         <label className={cn("text-xs font-black uppercase tracking-widest opacity-50", theme.muted)}>Громкость</label>
                         <div className={cn("flex items-center gap-4 p-4 rounded-2xl border", theme.card, theme.border)}>
-                          {room.musicSettings.volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                          {room.musicSettings?.volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                           <input 
                             type="range" 
                             min="0" 
                             max="1" 
                             step="0.01" 
-                            value={room.musicSettings.volume}
+                            value={room.musicSettings?.volume ?? 0.5}
                             onChange={(e) => updateMusicSettings({ volume: parseFloat(e.target.value) })}
                             className={cn("flex-1 accent-orange-500")}
                           />
@@ -2414,14 +2454,14 @@ export default function App() {
                       <div className="space-y-4">
                         <label className={cn("text-xs font-black uppercase tracking-widest opacity-50", theme.muted)}>Повтор</label>
                         <button 
-                          onClick={() => updateMusicSettings({ loop: !room.musicSettings.loop })}
+                          onClick={() => updateMusicSettings({ loop: !room.musicSettings?.loop })}
                           className={cn(
                             "w-full flex items-center justify-center gap-3 p-4 rounded-2xl border transition-all font-bold uppercase text-xs tracking-widest",
-                            room.musicSettings.loop ? "bg-orange-600 border-orange-500 text-white" : cn(theme.card, theme.border, "opacity-50")
+                            room.musicSettings?.loop ? "bg-orange-600 border-orange-500 text-white" : cn(theme.card, theme.border, "opacity-50")
                           )}
                         >
                           <Repeat className="w-4 h-4" />
-                          {room.musicSettings.loop ? 'Включен' : 'Выключен'}
+                          {room.musicSettings?.loop ? 'Включен' : 'Выключен'}
                         </button>
                       </div>
                     </div>
@@ -2437,31 +2477,31 @@ export default function App() {
                       </div>
                       
                       <div className="space-y-2">
-                        {room.musicSettings.playlist.length === 0 ? (
+                        {!room.musicSettings?.playlist || room.musicSettings.playlist.length === 0 ? (
                           <div className={cn("py-10 text-center border-2 border-dashed rounded-3xl opacity-30", theme.border)}>
                             <p className="text-sm font-bold uppercase tracking-widest">Плейлист пуст</p>
                           </div>
                         ) : (
-                          room.musicSettings.playlist.map((track) => (
+                          room.musicSettings?.playlist?.map((track) => (
                             <div 
                               key={track.id}
                               className={cn(
                                 "flex items-center justify-between p-4 rounded-2xl border transition-all",
-                                room.musicSettings.currentTrackId === track.id ? "bg-orange-500/20 border-orange-500/50" : cn(theme.card, theme.border)
+                                room.musicSettings?.currentTrackId === track.id ? "bg-orange-500/20 border-orange-500/50" : cn(theme.card, theme.border)
                               )}
                             >
                               <div className="flex items-center gap-4 overflow-hidden">
                                 <button 
                                   onClick={() => {
-                                    if (room.musicSettings.currentTrackId === track.id) {
-                                      updateMusicSettings({ isPlaying: !room.musicSettings.isPlaying });
+                                    if (room.musicSettings?.currentTrackId === track.id) {
+                                      updateMusicSettings({ isPlaying: !room.musicSettings?.isPlaying });
                                     } else {
                                       updateMusicSettings({ currentTrackId: track.id, isPlaying: true });
                                     }
                                   }}
                                   className="p-3 bg-white/10 rounded-xl hover:bg-white/20 transition-colors"
                                 >
-                                  {room.musicSettings.currentTrackId === track.id && room.musicSettings.isPlaying ? <Pause className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
+                                  {room.musicSettings?.currentTrackId === track.id && room.musicSettings?.isPlaying ? <Pause className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
                                 </button>
                                 <div className="truncate">
                                   <p className="font-bold text-sm truncate">{track.name}</p>
@@ -2480,11 +2520,11 @@ export default function App() {
                       </div>
                     </div>
 
-                    {room.musicSettings.suggestions.length > 0 && (
+                    {room.musicSettings?.suggestions && room.musicSettings.suggestions.length > 0 && (
                       <div className="space-y-4">
                         <label className="text-xs font-black uppercase tracking-widest text-yellow-500/70">Предложения от игроков</label>
                         <div className="space-y-2">
-                          {room.musicSettings.suggestions.map((track) => (
+                          {room.musicSettings?.suggestions?.map((track) => (
                             <div key={track.id} className="flex items-center justify-between p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-2xl">
                               <div className="truncate">
                                 <p className="font-bold text-sm truncate">{track.name}</p>
@@ -2523,17 +2563,17 @@ export default function App() {
                         </label>
                       </div>
                       <div className="space-y-2">
-                        {room.musicSettings.playlist.length === 0 ? (
+                        {!room.musicSettings?.playlist || room.musicSettings.playlist.length === 0 ? (
                           <div className={cn("py-10 text-center border-2 border-dashed rounded-3xl opacity-30", theme.border)}>
                             <p className="text-sm font-bold uppercase tracking-widest">Плейлист пуст</p>
                           </div>
                         ) : (
-                          room.musicSettings.playlist.map((track) => (
+                          room.musicSettings?.playlist?.map((track) => (
                             <div 
                               key={track.id}
                               className={cn(
                                 "flex items-center gap-4 p-4 rounded-2xl border transition-all",
-                                room.musicSettings.currentTrackId === track.id ? "bg-orange-500/20 border-orange-500/50" : cn(theme.card, theme.border)
+                                room.musicSettings?.currentTrackId === track.id ? "bg-orange-500/20 border-orange-500/50" : cn(theme.card, theme.border)
                               )}
                             >
                               <div className="p-3 bg-white/10 rounded-xl">
@@ -2543,7 +2583,7 @@ export default function App() {
                                 <p className="font-bold text-sm truncate">{track.name}</p>
                                 {track.suggestedByName && <p className={cn("text-[10px] opacity-40 uppercase font-black", theme.muted)}>От: {track.suggestedByName}</p>}
                               </div>
-                              {room.musicSettings.currentTrackId === track.id && room.musicSettings.isPlaying && (
+                              {room.musicSettings?.currentTrackId === track.id && room.musicSettings?.isPlaying && (
                                 <div className="ml-auto flex gap-1">
                                   <motion.div animate={{ height: [4, 12, 4] }} transition={{ repeat: Infinity, duration: 0.5 }} className="w-1 bg-orange-400" />
                                   <motion.div animate={{ height: [8, 4, 8] }} transition={{ repeat: Infinity, duration: 0.5, delay: 0.1 }} className="w-1 bg-orange-400" />
