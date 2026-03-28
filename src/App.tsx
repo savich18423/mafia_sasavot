@@ -572,9 +572,12 @@ export default function App() {
     });
   };
 
-  const joinRoom = async (overrideId?: string, overrideName?: string) => {
-    const trimmedName = (overrideName || playerName).trim();
-    const trimmedRoomId = (overrideId || roomId).trim().toUpperCase();
+  const joinRoom = async (overrideId?: string | React.MouseEvent, overrideName?: string) => {
+    const id = typeof overrideId === 'string' ? overrideId : roomId;
+    const name = typeof overrideName === 'string' ? overrideName : playerName;
+    
+    const trimmedName = name.trim();
+    const trimmedRoomId = id.trim().toUpperCase();
     if (!trimmedName || !trimmedRoomId) return toast.error('Введите имя и ID комнаты');
     setIsConnecting(true);
     const stream = await startMedia();
@@ -1445,7 +1448,7 @@ export default function App() {
                   <motion.button
                     whileHover={{ scale: 1.02, y: -4 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={joinRoom}
+                    onClick={() => joinRoom()}
                     disabled={isConnecting || !roomId.trim() || !playerName.trim()}
                     className={cn(
                       "w-full flex items-center justify-center gap-6 py-10 rounded-[2.5rem] transition-all font-black uppercase italic tracking-tighter text-3xl disabled:opacity-50 relative overflow-hidden group",
