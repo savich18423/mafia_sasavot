@@ -159,7 +159,8 @@ export default function App() {
   const handleMusicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0] || !room) return;
     const file = e.target.files[0];
-    if (file.size > 5 * 1024 * 1024) return toast.error('Файл слишком большой (макс. 5МБ)');
+    // Reduce limit to 3MB to be safer with localStorage/PeerJS and avoid QuotaExceededError
+    if (file.size > 3 * 1024 * 1024) return toast.error('Файл слишком большой (макс. 3МБ)');
     
     try {
       const base64 = await fileToBase64(file);
@@ -203,7 +204,8 @@ export default function App() {
         toast.success('Предложение отправлено хосту');
       }
     } catch (err) {
-      toast.error('Ошибка при загрузке файла');
+      console.error("Music upload error:", err);
+      toast.error('Ошибка при загрузке файла. Возможно, файл слишком велик.');
     }
   };
 
@@ -346,6 +348,20 @@ export default function App() {
               <Volume2 className="w-5 h-5" />
               Включить звук музыки
             </button>
+          </motion.div>
+        )}
+        {currentTrack && !currentTrack.data && musicSettings.isPlaying && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100]"
+          >
+            <div className={cn(
+              "flex items-center gap-3 px-6 py-4 rounded-3xl font-bold uppercase tracking-wider text-[10px] shadow-2xl border bg-red-600 text-white border-red-400 max-w-xs text-center",
+            )}>
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              Файл музыки не найден. После обновления страницы музыку нужно загрузить заново.
+            </div>
           </motion.div>
         )}
       </>
@@ -553,11 +569,33 @@ export default function App() {
 
   useEffect(() => {
     if (room) {
-      localStorage.setItem('mafia_room_id', room.id);
-      localStorage.setItem('mafia_player_name', playerName);
-      localStorage.setItem('mafia_is_host', (room.host === peerRef.current?.id).toString());
-      if (room.host === peerRef.current?.id) {
-        localStorage.setItem('mafia_room_state', JSON.stringify(room));
+      try {
+        localStorage.setItem('mafia_room_id', room.id);
+        localStorage.setItem('mafia_player_name', playerName);
+        localStorage.setItem('mafia_is_host', (room.host === peerRef.current?.id).toString());
+        
+        if (room.host === peerRef.current?.id) {
+          // Create a "lite" version of the room state for localStorage to avoid QuotaExceededError
+          // We strip the heavy base64 audio data, but keep the track metadata
+          const persistentRoom = {
+            ...room,
+            musicSettings: room.musicSettings ? {
+              ...room.musicSettings,
+              playlist: room.musicSettings.playlist.map(t => ({ ...t, data: '' })),
+              suggestions: room.musicSettings.suggestions.map(t => ({ ...t, data: '' }))
+            } : undefined
+          };
+          localStorage.setItem('mafia_room_state', JSON.stringify(persistentRoom));
+        }
+      } catch (e) {
+        console.warn("Failed to save state to localStorage (likely quota exceeded):", e);
+        // If it fails, we still want to save the basic info if possible
+        try {
+          localStorage.setItem('mafia_room_id', room.id);
+          localStorage.setItem('mafia_player_name', playerName);
+        } catch (innerE) {
+          console.error("Critical localStorage failure:", innerE);
+        }
       }
     }
   }, [room, playerName]);
