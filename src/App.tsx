@@ -94,8 +94,12 @@ const STATUS_NAMES: Record<string, string> = {
 // --- Main Component ---
 
 export default function App() {
-  const [userType, setUserType] = useState<'none' | 'regular' | 'streamer'>('none');
-  const [selectedTheme, setSelectedTheme] = useState<string>('default');
+  const [userType, setUserType] = useState<'none' | 'regular' | 'streamer'>(() => 
+    (localStorage.getItem('mafia_user_type') as any) || 'none'
+  );
+  const [selectedTheme, setSelectedTheme] = useState<string>(() => 
+    localStorage.getItem('mafia_theme') || 'default'
+  );
   const [playerName, setPlayerName] = useState('');
   const [roomId, setRoomId] = useState('');
   const [isJoining, setIsJoining] = useState(false);
@@ -105,6 +109,14 @@ export default function App() {
   const [error, setError] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+
+  useEffect(() => {
+    if (userType !== 'none') localStorage.setItem('mafia_user_type', userType);
+  }, [userType]);
+
+  useEffect(() => {
+    localStorage.setItem('mafia_theme', selectedTheme);
+  }, [selectedTheme]);
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -296,8 +308,9 @@ export default function App() {
   const autoRejoin = async (rId: string, name: string) => {
     setRoomId(rId);
     setPlayerName(name);
-    // We don't auto-join immediately to avoid annoying the user if they just wanted to browse
-    // But we could if we wanted to. Let's just set the fields for now.
+    setIsJoining(true);
+    toast.info('Переподключение к комнате...');
+    joinRoom(rId, name);
   };
 
   useEffect(() => {
@@ -559,9 +572,9 @@ export default function App() {
     });
   };
 
-  const joinRoom = async () => {
-    const trimmedName = playerName.trim();
-    const trimmedRoomId = roomId.trim().toUpperCase();
+  const joinRoom = async (overrideId?: string, overrideName?: string) => {
+    const trimmedName = (overrideName || playerName).trim();
+    const trimmedRoomId = (overrideId || roomId).trim().toUpperCase();
     if (!trimmedName || !trimmedRoomId) return toast.error('Введите имя и ID комнаты');
     setIsConnecting(true);
     const stream = await startMedia();
@@ -1205,7 +1218,7 @@ export default function App() {
                   initial={{ scale: 0.8, opacity: 0, rotateX: 45 }}
                   animate={{ scale: 1, opacity: 1, rotateX: 0 }}
                   transition={{ delay: 0.4, type: "spring", stiffness: 50 }}
-                  className={cn("text-[10vw] lg:text-[5.5rem] xl:text-[7rem] font-black tracking-tighter uppercase italic leading-[0.85]", theme.text)}
+                  className={cn("text-[10vw] lg:text-[5.5rem] xl:text-[7rem] font-black tracking-tighter uppercase italic leading-[0.85] text-white")}
                 >
                   Фруктовая <br />
                   <span className={theme.accent}>Мафия</span>
@@ -1219,9 +1232,22 @@ export default function App() {
                 />
               </div>
 
-              <p className={cn("text-xl max-w-lg font-medium leading-relaxed", theme.muted)}>
-                Разоблачите предателей, скрывающихся за анимированными говорящими фруктами. Игра на выживание, где на кону доверие и хитрость.
-              </p>
+              <div className="flex items-center gap-4">
+                <p className={cn("text-xl max-w-lg font-medium leading-relaxed", theme.muted)}>
+                  Разоблачите предателей, скрывающихся за анимированными говорящими фруктами. Игра на выживание, где на кону доверие и хитрость.
+                </p>
+                <button 
+                  onClick={() => {
+                    setUserType('none');
+                    setSelectedTheme('default');
+                    localStorage.removeItem('mafia_user_type');
+                    localStorage.removeItem('mafia_theme');
+                  }}
+                  className={cn("px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", theme.card, theme.border, theme.muted, "hover:text-white")}
+                >
+                  Сменить тему
+                </button>
+              </div>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-10">
