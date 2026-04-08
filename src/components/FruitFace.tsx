@@ -34,11 +34,29 @@ const FRUIT_IMAGES: Record<string, string> = {
   orange: 'https://pngicon.ru/file/uploads/2_55.png',
   grapefruit: 'https://imgpng.ru/d/grapefruit_PNG15258.png',
   pomelo: 'https://static.vecteezy.com/system/resources/previews/060/361/467/non_2x/fresh-green-pomelo-fruit-on-a-clean-transparent-background-ready-for-culinary-use-or-as-part-of-a-healthy-diet-fresh-green-pomelo-on-a-transparent-background-free-png.png',
-  lemon: 'https://png.pngtree.com/png-clipart/20240220/original/pngtree-lemon-on-white-background-fruit-photo-png-image_14363893.png',
+  lemon: 'https://png.pngtree.com/png-vector/20251012/ourmid/pngtree-bright-yellow-lemon-fruit-png-image_17699581.webp',
   lime: 'https://imgpng.ru/d/lime_PNG52.png',
   guava: 'https://png.klev.club/uploads/posts/2024-05/thumbs/png-klev-club-4ae4-p-guava-png-26.png',
   apricot: 'https://pngicon.ru/file/uploads/abrikos.png',
   tangerine: 'https://png.pngtree.com/png-clipart/20250212/original/pngtree-tangerine-fruit-png-image_20422728.png',
+  strawberry: 'https://pngimg.com/uploads/strawberry/strawberry_PNG2595.png',
+  blueberry: 'https://pngimg.com/uploads/blueberries/blueberries_PNG43.png',
+  cherry: 'https://pngimg.com/uploads/cherry/cherry_PNG632.png',
+  banana: 'https://pngimg.com/uploads/banana/banana_PNG825.png',
+  pineapple: 'https://pngimg.com/uploads/pineapple/pineapple_PNG2722.png',
+  mango: 'https://pngimg.com/uploads/mango/mango_PNG9160.png',
+  // Vegetables
+  tomato: 'https://pngicon.ru/file/uploads/1303507287_Tomato.png',
+  pumpkin: 'https://free-png.ru/wp-content/uploads/2022/02/free-png.ru-453.png',
+  cucumber: 'https://avatanplus.com/files/resources/original/59c610ee72ce515eadb22386.png',
+  pattypan: 'https://png.pngtree.com/png-vector/20250808/ourmid/pngtree-pattypan-squash-isolated-on-a-transparent-background-png-image_16739120.webp',
+  turnip: 'https://purepng.com/public/uploads/large/purepng.com-turnipvegetablesroot-vegetable-rutabaga-turnip-neep-941524702929wkfry.png',
+  pepper: 'https://gallery.yopriceville.com/downloadfullsize/send/10651',
+  zucchini: 'https://pngimg.com/uploads/marrow/marrow_PNG24.png',
+  eggplant: 'https://imgpng.ru/d/eggplant_PNG2763.png',
+  cabbage: 'https://imgpng.ru/d/cabbage_PNG8787.png',
+  potato: 'https://png.klev.club/uploads/posts/2024-04/png-klev-club-j750-p-kartofel-png-1.png',
+  onion: 'https://free-png.ru/wp-content/uploads/2022/02/free-png.ru-332.png',
 };
 
 const FRUIT_COLORS: Record<string, string> = {
@@ -52,6 +70,24 @@ const FRUIT_COLORS: Record<string, string> = {
   guava: '#98FB98',
   apricot: '#FBCEB1',
   tangerine: '#FF8C00',
+  strawberry: '#FF2D55',
+  blueberry: '#4F86F7',
+  cherry: '#D2042D',
+  banana: '#FFE135',
+  pineapple: '#FFD700',
+  mango: '#FF8243',
+  // Vegetables
+  tomato: '#FF6347',
+  pumpkin: '#FF7518',
+  cucumber: '#2E8B57',
+  pattypan: '#F0E68C',
+  turnip: '#E6E6FA',
+  pepper: '#FF0000',
+  zucchini: '#556B2F',
+  eggplant: '#4B0082',
+  cabbage: '#90EE90',
+  potato: '#D2B48C',
+  onion: '#E0C090',
 };
 
 export const FruitFace: React.FC<FruitFaceProps> = ({ 
@@ -109,8 +145,14 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
           const fruitImg = new Image();
           fruitImg.src = FRUIT_IMAGES[currentFruit] || FRUIT_IMAGES.orange;
 
-          // 1. Fill background with fruit color
-          ctx.fillStyle = FRUIT_COLORS[currentFruit] || '#000000';
+          // 1. Draw camera feed as background instead of solid color
+          ctx.save();
+          ctx.filter = 'blur(10px) brightness(0.6)'; // Blur background to make fruit pop
+          ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
+
+          // 2. Add a slight tint of the fruit color to the background
+          ctx.fillStyle = (FRUIT_COLORS[currentFruit] || '#000000') + '33'; // 20% opacity tint
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
           if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
@@ -133,9 +175,7 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
             const centerY = (minY + maxY) / 2 * canvas.height;
 
             ctx.save();
-            ctx.shadowColor = 'rgba(0,0,0,0.3)';
-            ctx.shadowBlur = 20;
-            ctx.shadowOffsetY = 10;
+            // Simplified drawing for performance
             ctx.drawImage(fruitImg, centerX - width / 2, centerY - height / 2, width, height);
             ctx.restore();
 
@@ -218,9 +258,11 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
             drawMaskedRegion(mouthIndices, 1.9, 10, tint);
 
           } else {
-            // Consistent solid background
-            ctx.fillStyle = FRUIT_COLORS[currentFruit] || '#000000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Draw camera feed even when no face is detected
+            ctx.save();
+            ctx.filter = 'blur(10px) brightness(0.4)';
+            ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
             
             // Draw a large "waiting" fruit
             const w = canvas.width * 0.6;
@@ -301,7 +343,8 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
 
     let animationId: number;
     let lastProcessTime = 0;
-    const FRAME_INTERVAL = 40; // ~25fps
+    // Increase interval for remote players to save CPU, keep local smooth
+    const FRAME_INTERVAL = isLocal ? 33 : 66; 
 
     const processVideo = async (now: number) => {
       if (video.readyState >= 2 && faceMeshRef.current && (now - lastProcessTime >= FRAME_INTERVAL)) {
@@ -309,7 +352,6 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
           lastProcessTime = now;
           await faceMeshRef.current.send({ image: video });
         } catch (err) {
-          // Ignore processing errors to prevent crash loop
           console.warn('FaceMesh processing warning:', err);
         }
       }
@@ -349,8 +391,8 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
           "w-full h-full object-cover transition-all duration-1000",
           !isAlive && "sepia brightness-50"
         )}
-        width={600}
-        height={800}
+        width={400}
+        height={533}
       />
 
       {/* Dead Overlay */}
