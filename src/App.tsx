@@ -16,7 +16,7 @@ import { Toaster, toast } from 'sonner';
 
 type Role = 'mafia' | 'doctor' | 'detective' | 'citizen';
 type Phase = 'waiting' | 'night' | 'day_results' | 'day_discussion' | 'voting' | 'elimination' | 'game_over';
-type GameMode = 'classic' | 'blind' | 'chaos';
+type GameMode = 'classic' | 'blind' | 'chaos' | 'speedrun' | 'hardcore';
 
 interface Player {
   id: string;
@@ -89,6 +89,7 @@ interface Room {
   pauseTimer?: number;
   musicSettings: MusicSettings;
   gameMode: GameMode;
+  characterSet: 'fruits' | 'vegetables';
   reactions: Reaction[];
 }
 
@@ -96,6 +97,11 @@ const FRUITS = [
   'watermelon', 'apple', 'orange', 'grapefruit', 'pomelo', 
   'lemon', 'lime', 'guava', 'apricot', 'tangerine',
   'strawberry', 'blueberry', 'cherry', 'banana', 'pineapple', 'mango'
+];
+
+const VEGETABLES = [
+  'tomato', 'pumpkin', 'cucumber', 'pattypan', 'turnip',
+  'pepper', 'zucchini', 'eggplant', 'cabbage', 'potato', 'onion'
 ];
 
 const BOT_NAMES = [
@@ -119,6 +125,16 @@ const PHASE_NAMES: Record<Phase, string> = {
   voting: 'Голосование',
   elimination: 'Исключение',
   game_over: 'Конец игры'
+};
+
+const PHASE_DESCRIPTIONS: Record<Phase, string> = {
+  waiting: 'Ожидаем игроков для начала...',
+  night: 'Город засыпает, просыпается мафия.',
+  day_results: 'Город проснулся. Узнаем, что произошло.',
+  day_discussion: 'Обсудите события и найдите мафию.',
+  voting: 'Пришло время выбрать, кто покинет город.',
+  elimination: 'Голоса подсчитаны. Кто-то покидает игру.',
+  game_over: 'Игра окончена. Подводим итоги.'
 };
 
 const STATUS_NAMES: Record<string, string> = {
@@ -228,22 +244,7 @@ const MusicPlayer = ({ room, peerId, updateMusicSettings, theme }: {
 };
 
 const ReactionMenu = ({ onSelect }: { onSelect: (emoji: string) => void }) => {
-  const emojis = ['👍', '👎', '😂', '😮', '😢', '🔥', '👀', '🤔', '🤫', '💀'];
-  return (
-    <div className="flex flex-wrap gap-2 p-3 bg-black/60 backdrop-blur-2xl rounded-[2rem] border border-white/10 shadow-2xl">
-      {emojis.map(emoji => (
-        <motion.button
-          key={emoji}
-          whileHover={{ scale: 1.3, rotate: [0, -10, 10, 0] }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => onSelect(emoji)}
-          className="text-2xl hover:bg-white/10 p-2 rounded-xl transition-colors"
-        >
-          {emoji}
-        </motion.button>
-      ))}
-    </div>
-  );
+  return null;
 };
 
 const THEMES_DATA: Record<string, any> = {
@@ -956,7 +957,8 @@ export default function App() {
           return;
         }
 
-        const fruit = FRUITS.find(f => !currentRoom.players.map(p => p.fruit).includes(f)) || 'orange';
+        const pool = currentRoom.characterSet === 'vegetables' ? VEGETABLES : FRUITS;
+        const fruit = pool.find(f => !currentRoom.players.map(p => p.fruit).includes(f)) || (currentRoom.characterSet === 'vegetables' ? 'tomato' : 'orange');
         const newPlayer: Player = { 
           id: conn.peer, 
           name: data.playerName, 
@@ -1222,6 +1224,7 @@ export default function App() {
         logs: [{ message: 'Комната создана. Ожидание игроков...', type: 'system', timestamp: Date.now() }],
         winner: null,
         gameMode: 'classic',
+        characterSet: 'fruits',
         reactions: [],
         musicSettings: {
           volume: 0.5,
@@ -1326,18 +1329,33 @@ export default function App() {
     broadcast(updatedRoom);
   };
 
+  const updateCharacterSet = (set: 'fruits' | 'vegetables') => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    
+    // Update existing players to the new set
+    const pool = set === 'vegetables' ? VEGETABLES : FRUITS;
+    const updatedPlayers = room.players.map((p, i) => ({
+      ...p,
+      fruit: pool[i % pool.length]
+    }));
+
+    const updatedRoom = { ...room, characterSet: set, players: updatedPlayers };
+    broadcast(updatedRoom);
+  };
+
   const addBots = (count: number) => {
     if (!room || room.host !== peerRef.current?.id) return;
     
     const currentPlayers = room.players;
-    const availableFruits = FRUITS.filter(f => !currentPlayers.map(p => p.fruit).includes(f));
+    const characterPool = room.characterSet === 'vegetables' ? VEGETABLES : FRUITS;
+    const availableCharacters = characterPool.filter(f => !currentPlayers.map(p => p.fruit).includes(f));
     const availableNames = BOT_NAMES.filter(n => !currentPlayers.map(p => p.name).includes(n));
     
     const newBots: Player[] = [];
     for (let i = 0; i < count; i++) {
       if (currentPlayers.length + newBots.length >= room.maxPlayers) break;
       
-      const fruit = availableFruits[i % availableFruits.length] || 'orange';
+      const fruit = availableCharacters[i % availableCharacters.length] || (room.characterSet === 'vegetables' ? 'tomato' : 'orange');
       const name = availableNames[i % availableNames.length] || `Бот ${i + 1}`;
       
       newBots.push({
@@ -1369,17 +1387,47 @@ export default function App() {
     broadcast(updatedRoom);
   };
 
+  // Speedrun Mode Logic
+  useEffect(() => {
+    if (!room || room.host !== peerRef.current?.id || room.status !== 'playing' || room.gameMode !== 'speedrun' || room.isPaused) return;
+
+    const phaseTimers: Record<Phase, number> = {
+      waiting: 0,
+      night: 15000, // 15s for night
+      day_results: 5000, // 5s for results
+      day_discussion: 20000, // 20s for discussion
+      voting: 15000, // 15s for voting
+      elimination: 5000, // 5s for elimination
+      game_over: 0
+    };
+
+    const duration = phaseTimers[room.phase];
+    if (duration === 0) return;
+
+    const timer = setTimeout(() => {
+      if (room.phase === 'night') {
+        resolveNight(room);
+      } else if (room.phase === 'voting') {
+        resolveVoting(room);
+      } else {
+        nextPhase();
+      }
+    }, duration);
+
+    return () => clearTimeout(timer);
+  }, [room?.phase, room?.status, room?.gameMode, room?.isPaused]);
+
   // Bot Logic
   useEffect(() => {
     if (!room || room.host !== peerRef.current?.id || room.status !== 'playing') return;
 
-    const bots = room.players.filter(p => p.isBot && p.isAlive);
-    if (bots.length === 0) return;
-
-    const botActionTimeout = setTimeout(() => {
+    const interval = setInterval(() => {
       const currentRoom = roomRef.current;
-      if (!currentRoom) return;
+      if (!currentRoom || currentRoom.isPaused) return;
       
+      const bots = currentRoom.players.filter(p => p.isBot && p.isAlive);
+      if (bots.length === 0) return;
+
       const updatedRoom = { ...currentRoom };
       let changed = false;
 
@@ -1455,7 +1503,7 @@ export default function App() {
       }
 
       // Bot Chat Messages
-      if (updatedRoom.phase === 'day_discussion' && Math.random() < 0.1) {
+      if (updatedRoom.phase === 'day_discussion' && Math.random() < 0.05) {
         const randomBot = bots[Math.floor(Math.random() * bots.length)];
         const messages = [
           'Я думаю, это кто-то из новеньких...',
@@ -1480,10 +1528,10 @@ export default function App() {
       if (changed) {
         broadcast(updatedRoom);
       }
-    }, 5000 + Math.random() * 5000);
+    }, 3000);
 
-    return () => clearTimeout(botActionTimeout);
-  }, [room?.phase, room?.status, room?.nightActions, room?.votes]);
+    return () => clearInterval(interval);
+  }, [room?.status, room?.host]);
 
   const sendReaction = (emoji: string) => {
     if (!roomRef.current) return;
@@ -1505,7 +1553,11 @@ export default function App() {
 
   const startGame = () => {
     if (!room) return;
-    if (room.players.length < 5) return toast.error('Нужно минимум 5 игроков');
+    
+    const minPlayers = room.gameMode === 'chaos' ? 12 : 5;
+    if (room.players.length < minPlayers) {
+      return toast.error(`Для этого режима нужно минимум ${minPlayers} игроков`);
+    }
 
     const shuffled = [...room.players].sort(() => 0.5 - Math.random());
     
@@ -1518,10 +1570,20 @@ export default function App() {
       const index = shuffled.findIndex(s => s.id === p.id);
       let role: Role = 'citizen';
       if (index < mafiaCount) role = 'mafia';
-      else if (index === mafiaCount) role = 'doctor';
-      else if (index === mafiaCount + 1) role = 'detective';
+      else if (room.gameMode !== 'hardcore') {
+        if (index === mafiaCount) role = 'doctor';
+        else if (index === mafiaCount + 1) role = 'detective';
+      }
       return { ...p, role };
     });
+
+    const modeName = {
+      classic: 'Классический',
+      blind: 'Вслепую',
+      chaos: 'Рубилово (3 Мафии)',
+      speedrun: 'Спидран (Авто-фазы)',
+      hardcore: 'Хардкор (Без Доктора/Детектива)'
+    }[room.gameMode];
 
     const updatedRoom: Room = {
       ...room,
@@ -1530,7 +1592,7 @@ export default function App() {
       players: updatedPlayers,
       nightActions: { mafiaTarget: null, doctorTarget: null, detectiveTarget: null },
       logs: [
-        { message: `Игра началась! Режим: ${room.gameMode === 'classic' ? 'Классический' : room.gameMode === 'blind' ? 'Вслепую' : 'Рубилово (3 Мафии)'}`, type: 'system', timestamp: Date.now() },
+        { message: `Игра началась! Режим: ${modeName}`, type: 'system', timestamp: Date.now() },
         { message: 'Наступила ночь. Город засыпает...', type: 'info', timestamp: Date.now() },
         ...room.logs
       ]
@@ -2128,7 +2190,7 @@ export default function App() {
             {/* Decorative Glow */}
             <div className="absolute -inset-4 bg-orange-600/20 blur-[100px] rounded-full opacity-50 animate-pulse" />
             
-            <div className={cn("border backdrop-blur-3xl p-12 rounded-[4rem] shadow-[0_40px_100px_rgba(0,0,0,0.5)] relative overflow-hidden ring-1 ring-white/5", theme.card, theme.border)}>
+            <div className={cn("border p-12 rounded-[4rem] shadow-[0_40px_100px_rgba(0,0,0,0.5)] relative overflow-hidden ring-1 ring-white/5", theme.card, theme.border)}>
               <div className={cn("absolute top-0 right-0 w-64 h-64 blur-[100px] rounded-full -mr-32 -mt-32 opacity-20", theme.accentBg)} />
               
               {!isJoining ? (
@@ -2182,7 +2244,7 @@ export default function App() {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setIsJoining(true)}
                       className={cn(
-                        "flex items-center justify-between px-10 py-10 bg-white/5 hover:bg-white/10 rounded-[2.5rem] transition-all group border backdrop-blur-xl",
+                        "flex items-center justify-between px-10 py-10 bg-white/5 hover:bg-white/10 rounded-[2.5rem] transition-all group border",
                         theme.border
                       )}
                     >
@@ -2279,7 +2341,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-xl"
+              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80"
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -2378,38 +2440,7 @@ export default function App() {
       
       <BackgroundAtmosphere theme={theme} phase={room.phase} disabled={disableCustomBackground} />
 
-      <AnimatePresence>
-        {(room.phase === 'night' || room.phase === 'day_results' || room.phase === 'voting' || room.phase === 'game_over') && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none"
-          >
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0, rotateX: 90 }}
-              animate={{ scale: 1, opacity: 1, rotateX: 0 }}
-              exit={{ scale: 1.5, opacity: 0 }}
-              transition={{ type: "spring", damping: 12, stiffness: 100 }}
-              className={cn("backdrop-blur-3xl border px-20 py-10 rounded-[4rem] shadow-2xl", theme.card, theme.border)}
-            >
-              <h1 className="text-9xl font-black italic uppercase tracking-tighter leading-none text-center">
-                {room.phase === 'night' && (
-                  <div className="flex flex-col items-center">
-                    <span className="text-indigo-500">Ночь <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Наступила</span></span>
-                    <p className="mt-8 text-xs font-black uppercase tracking-[0.4em] text-indigo-400/60 pointer-events-none">
-                      {me?.role === 'citizen' ? 'Мирные жители спят...' : 'Наведите на игрока, чтобы выбрать цель'}
-                    </p>
-                  </div>
-                )}
-                {room.phase === 'day_results' && <span className={theme.accent}>День <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Настал</span></span>}
-                {room.phase === 'voting' && <span className="text-red-500">Время <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Голосовать</span></span>}
-                {room.phase === 'game_over' && <span className="text-yellow-500">Игра <br/><span className="text-4xl tracking-[0.5em] not-italic font-medium opacity-50">Окончена</span></span>}
-              </h1>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Large Phase Overlay removed as requested */}
 
       {/* Night Overlay */}
       <AnimatePresence>
@@ -2418,14 +2449,14 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={cn("fixed inset-0 z-[60] pointer-events-none backdrop-blur-[2px] mix-blend-multiply", theme.overlay)}
+            className={cn("fixed inset-0 z-[60] pointer-events-none mix-blend-multiply", theme.overlay)}
           />
         )}
       </AnimatePresence>
 
       {/* Header */}
       <header className={cn(
-        "h-24 border-b flex items-center justify-between px-10 backdrop-blur-3xl sticky top-0 z-50 ring-1 ring-white/5",
+        "h-24 border-b flex items-center justify-between px-10 sticky top-0 z-50 ring-1 ring-white/5",
         theme.header,
         theme.border
       )}>
@@ -2469,7 +2500,7 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-6">
-          <div className={cn("flex items-center gap-3 px-6 py-3 rounded-2xl border bg-white/5 backdrop-blur-md shadow-xl", theme.border)}>
+          <div className={cn("flex items-center gap-3 px-6 py-3 rounded-2xl border bg-white/5 shadow-xl", theme.border)}>
             <span className={cn("text-[10px] font-black tracking-[0.2em] uppercase opacity-60 font-display", theme.accent)}>Текущая фаза</span>
             <span className={cn("text-sm font-black tracking-widest uppercase italic font-display", theme.accent)}>{PHASE_NAMES[room.phase]}</span>
           </div>
@@ -2503,24 +2534,40 @@ export default function App() {
 
       <main className="flex-1 p-10 flex gap-10 overflow-hidden relative z-10">
         {/* Game Grid */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-8 overflow-y-auto pr-4 custom-scrollbar">
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-8 overflow-y-auto pr-4 pt-10 pb-32 custom-scrollbar">
           <AnimatePresence mode="popLayout">
             {room.players.map(player => (
               <motion.div 
                 layout
                 key={player.id} 
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: -20 }}
-                transition={{ type: "spring", damping: 20, stiffness: 100 }}
+                initial={{ opacity: 0, scale: 0.8, y: 50, rotateY: 45 }}
+                animate={{ 
+                  opacity: 1, 
+                  scale: 1, 
+                  y: 0, 
+                  rotateY: 0,
+                  transition: { type: "spring", damping: 15, stiffness: 100 }
+                }}
+                whileHover={{ 
+                  scale: 1.03, 
+                  y: -15,
+                  rotateZ: 0.5,
+                  zIndex: 50,
+                  transition: { duration: 0.3 }
+                }}
+                exit={{ opacity: 0, scale: 0.8, y: -50, rotateY: -45 }}
                 className={cn(
-                  "relative group rounded-[3rem] overflow-hidden border-4 transition-all duration-700",
+                  "relative group rounded-[3.5rem] overflow-hidden border-4 transition-all duration-700 shadow-2xl",
                   player.isAlive 
-                    ? cn(theme.border, "shadow-2xl hover:border-orange-500/30 hover:shadow-orange-500/20") 
-                    : "border-red-900/10 opacity-60",
-                  room.phase === 'night' && me?.role === 'mafia' && player.role === 'mafia' && "border-red-600/50 shadow-[0_0_30px_rgba(220,38,38,0.2)]"
+                    ? cn(theme.border, "hover:border-orange-500/50 hover:shadow-orange-500/30") 
+                    : "border-red-900/20 opacity-40 grayscale-[0.5]",
+                  room.phase === 'night' && me?.role === 'mafia' && player.role === 'mafia' && "border-red-600/60 shadow-[0_0_40px_rgba(220,38,38,0.3)]"
                 )}
               >
+                {/* Floating effect for alive players */}
+                {player.isAlive && (
+                  <div className="absolute inset-0 pointer-events-none animate-float opacity-20 bg-gradient-to-b from-white/5 to-transparent" />
+                )}
                 {/* Reactions Overlay */}
                 <div className="absolute top-8 right-8 z-[60] flex flex-col gap-4 pointer-events-none">
                   <AnimatePresence>
@@ -2529,10 +2576,20 @@ export default function App() {
                       .map(reaction => (
                         <motion.div
                           key={reaction.timestamp}
-                          initial={{ opacity: 0, scale: 0, y: 20, rotate: -20 }}
-                          animate={{ opacity: 1, scale: 2, y: -60, rotate: 0 }}
-                          exit={{ opacity: 0, scale: 0.5, y: -120, rotate: 20 }}
-                          className="text-5xl filter drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]"
+                          initial={{ opacity: 0, scale: 0, y: 40, rotate: -45, filter: "blur(10px)" }}
+                          animate={{ 
+                            opacity: 1, 
+                            scale: [0, 2.5, 2], 
+                            y: -100, 
+                            rotate: [0, 20, -10, 0],
+                            filter: "blur(0px)"
+                          }}
+                          exit={{ opacity: 0, scale: 0, y: -200, filter: "blur(10px)" }}
+                          transition={{ 
+                            duration: 0.8,
+                            ease: "backOut"
+                          }}
+                          className="text-6xl filter drop-shadow-[0_0_30px_rgba(255,255,255,0.9)] select-none"
                         >
                           {reaction.emoji}
                         </motion.div>
@@ -2558,62 +2615,84 @@ export default function App() {
                   />
                   
                   {player.isBot && (
-                    <div className="absolute top-8 left-8 z-50 px-4 py-1.5 bg-purple-600/20 backdrop-blur-xl rounded-xl border border-purple-400/30 shadow-[0_0_20px_rgba(147,51,234,0.3)]">
+                    <div className="absolute top-8 left-8 z-50 px-4 py-1.5 bg-purple-600/20 rounded-xl border border-purple-400/30 shadow-[0_0_20px_rgba(147,51,234,0.3)]">
                       <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-200 font-display">BOT</span>
                     </div>
                   )}
                   
                   {/* Action Button Overlay */}
                   {room.status === 'playing' && me?.isAlive && player.isAlive && player.id !== me.id && (
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center p-12 z-40 backdrop-blur-md">
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center p-12 z-40">
                       <div className="w-full space-y-4">
                         {room.phase === 'night' && (
                           <>
                             {me.role === 'mafia' && (
                               <motion.button 
-                                whileHover={{ scale: 1.05, y: -5 }}
+                                whileHover={{ 
+                                  scale: 1.05, 
+                                  y: -5,
+                                  boxShadow: "0 25px 50px rgba(220,38,38,0.5)"
+                                }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => handleNightAction(player.id)}
-                                className="w-full py-6 bg-red-600 hover:bg-red-500 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-[0_20px_40px_rgba(220,38,38,0.4)] text-white border border-red-400/30 font-display"
+                                className="w-full py-7 bg-red-600 hover:bg-red-500 rounded-[2.5rem] font-black uppercase text-[11px] tracking-[0.4em] shadow-[0_20px_40px_rgba(220,38,38,0.4)] text-white border border-red-400/30 font-display relative overflow-hidden group/btn"
                               >
-                                Устранить
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
+                                <span className="relative z-10">Устранить</span>
                               </motion.button>
                             )}
                             {me.role === 'doctor' && (
                               <motion.button 
-                                whileHover={{ scale: 1.05, y: -5 }}
+                                whileHover={{ 
+                                  scale: 1.05, 
+                                  y: -5,
+                                  boxShadow: "0 25px 50px rgba(34,197,94,0.5)"
+                                }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => handleNightAction(player.id)}
-                                className="w-full py-6 bg-green-600 hover:bg-green-500 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-[0_20px_40px_rgba(34,197,94,0.4)] text-white border border-green-400/30 font-display"
+                                className="w-full py-7 bg-green-600 hover:bg-green-500 rounded-[2.5rem] font-black uppercase text-[11px] tracking-[0.4em] shadow-[0_20px_40px_rgba(34,197,94,0.4)] text-white border border-green-400/30 font-display relative overflow-hidden group/btn"
                               >
-                                Защитить
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
+                                <span className="relative z-10">Защитить</span>
                               </motion.button>
                             )}
                             {me.role === 'detective' && (
                               <motion.button 
-                                whileHover={{ scale: 1.05, y: -5 }}
+                                whileHover={{ 
+                                  scale: 1.05, 
+                                  y: -5,
+                                  boxShadow: "0 25px 50px rgba(37,99,235,0.5)"
+                                }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => handleNightAction(player.id)}
-                                className="w-full py-6 bg-blue-600 hover:bg-blue-500 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-[0_20px_40px_rgba(37,99,235,0.4)] text-white border border-blue-400/30 font-display"
+                                className="w-full py-7 bg-blue-600 hover:bg-blue-500 rounded-[2.5rem] font-black uppercase text-[11px] tracking-[0.4em] shadow-[0_20px_40px_rgba(37,99,235,0.4)] text-white border border-blue-400/30 font-display relative overflow-hidden group/btn"
                               >
-                                Проверить
+                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
+                                <span className="relative z-10">Проверить</span>
                               </motion.button>
                             )}
                           </>
                         )}
                         {room.phase === 'voting' && (
                           <motion.button 
-                            whileHover={{ scale: 1.05, y: -5 }}
+                            whileHover={{ 
+                              scale: 1.05, 
+                              y: -5,
+                              boxShadow: room.votes[me.id] === player.id 
+                                ? "0 25px 50px rgba(234,88,12,0.5)" 
+                                : "0 25px 50px rgba(0,0,0,0.2)"
+                            }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => castVote(player.id)}
                             className={cn(
-                              "w-full py-6 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl transition-all border font-display",
+                              "w-full py-7 rounded-[2.5rem] font-black uppercase text-[11px] tracking-[0.4em] shadow-2xl transition-all border font-display relative overflow-hidden group/btn",
                               room.votes[me.id] === player.id 
                                 ? "bg-orange-600 text-white border-orange-400/30 shadow-[0_20px_40px_rgba(234,88,12,0.4)]" 
                                 : "bg-white text-black border-white/20 hover:bg-zinc-200"
                             )}
                           >
-                            {room.votes[me.id] === player.id ? 'Проголосовано' : 'Голосовать'}
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover/btn:animate-shimmer" />
+                            <span className="relative z-10">{room.votes[me.id] === player.id ? 'Проголосовано' : 'Голосовать'}</span>
                           </motion.button>
                         )}
                       </div>
@@ -2629,7 +2708,7 @@ export default function App() {
         <aside className="w-[28rem] flex flex-col gap-8">
           {/* Game Control Card */}
           <div className={cn(
-            "backdrop-blur-3xl rounded-[3rem] p-10 space-y-10 shadow-2xl relative overflow-hidden flex flex-col border",
+            "rounded-[3rem] p-10 space-y-10 shadow-2xl relative overflow-hidden flex flex-col border",
             theme.card,
             theme.border
           )} style={theme.handDrawn ? { borderRadius: '255px 15px 225px 15px/15px 225px 15px 255px' } : {}}>
@@ -2698,12 +2777,37 @@ export default function App() {
                   </div>
 
                   <div className="space-y-3">
+                    <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Персонажи</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'fruits', name: 'Фрукты' },
+                        { id: 'vegetables', name: 'Овощи' }
+                      ].map(set => (
+                        <button
+                          key={set.id}
+                          onClick={() => updateCharacterSet(set.id as 'fruits' | 'vegetables')}
+                          className={cn(
+                            "p-4 rounded-2xl border text-center transition-all",
+                            room.characterSet === set.id 
+                              ? "bg-white/10 border-white/20" 
+                              : "border-transparent hover:bg-white/5"
+                          )}
+                        >
+                          <p className={cn("text-xs font-black uppercase tracking-wider", room.characterSet === set.id ? theme.accent : theme.text)}>{set.name}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
                     <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Режим игры</p>
                     <div className="grid grid-cols-1 gap-2">
                       {[
                         { id: 'classic', name: 'Классика', desc: 'Стандартные правила' },
                         { id: 'blind', name: 'Вслепую', desc: 'Роли не раскрываются' },
-                        { id: 'chaos', name: 'Рубилово', desc: 'Всегда 3 мафии' }
+                        { id: 'chaos', name: 'Рубилово', desc: '3 мафии (мин. 12 игроков)' },
+                        { id: 'speedrun', name: 'Спидран', desc: 'Быстрая игра' },
+                        { id: 'hardcore', name: 'Хардкор', desc: 'Без доктора и детектива' }
                       ].map(mode => (
                         <button
                           key={mode.id}
@@ -2723,17 +2827,22 @@ export default function App() {
                   </div>
                   
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ 
+                      scale: 1.02,
+                      boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+                      y: -4
+                    }}
+                    whileTap={{ scale: 0.96, y: 0 }}
                     onClick={startGame}
-                    disabled={room.players.length < 5}
+                    disabled={room.players.length < (room.gameMode === 'chaos' ? 12 : 5)}
                     className={cn(
-                      "w-full py-8 transition-all rounded-[2rem] font-black uppercase italic tracking-tighter text-2xl shadow-2xl disabled:opacity-50 disabled:grayscale",
+                      "w-full py-8 transition-all duration-300 rounded-[2rem] font-black uppercase italic tracking-tighter text-2xl shadow-2xl disabled:opacity-50 disabled:grayscale relative overflow-hidden group",
                       theme.accent.replace('text-', 'bg-'),
                       "text-white"
                     )}
                   >
-                    Начать игру
+                    <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:animate-shimmer" />
+                    <span className="relative z-10">Начать игру</span>
                   </motion.button>
                 </div>
               )}
@@ -2780,16 +2889,28 @@ export default function App() {
                         <div className={cn("p-4 rounded-2xl bg-white/5 border", theme.border)}>
                           {room.phase === 'night' ? <Moon className="w-8 h-8 text-indigo-400" /> : <Sun className="w-8 h-8 text-orange-400" />}
                         </div>
-                        <div>
-                          <h4 className="text-4xl font-black uppercase italic tracking-tighter font-display">{PHASE_NAMES[room.phase]}</h4>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-4xl font-black uppercase italic tracking-tighter font-display break-words leading-[0.9]">{PHASE_NAMES[room.phase]}</h4>
                           <p className={cn("text-[10px] font-black uppercase tracking-[0.3em]", theme.muted)}>Фаза игры</p>
                         </div>
                       </div>
                       
-                      <p className={cn("text-xs leading-relaxed font-medium", theme.text)}>
+                      <div className={cn("text-xs leading-relaxed font-medium", theme.text)}>
                         {room.phase === 'night' && (
-                          <>
-                            {me?.role === 'mafia' && "Выберите цель для устранения вместе с другими членами Мафии."}
+                          <div className="space-y-4">
+                            {me?.role === 'mafia' && (
+                              <div className="space-y-3">
+                                <p>Выберите цель для устранения вместе с другими членами Мафии.</p>
+                                {room.players.filter(p => p.role === 'mafia' && p.isAlive).length > 1 && (
+                                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3">
+                                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                                    <p className="text-[9px] text-red-400 font-black uppercase tracking-widest leading-relaxed">
+                                      Внимание: Кто первый нажмет на цель, тот и делает ход за всю Мафию!
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             {me?.role === 'doctor' && "Выберите, кого вы хотите защитить этой ночью."}
                             {me?.role === 'detective' && "Выберите игрока, чью роль вы хотите проверить."}
                             {me?.role === 'citizen' && "Город спит. Надейтесь, что Мафия не выберет вас."}
@@ -2804,16 +2925,16 @@ export default function App() {
                                 <span className="px-3 py-1.5 bg-blue-500/10 text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-xl border border-blue-500/20">Детектив</span>
                               )}
                             </div>
-                          </>
+                          </div>
                         )}
                         {room.phase === 'day_results' && "Солнце встает. Город узнает, что произошло ночью."}
                         {room.phase === 'voting' && "Время обсуждения. Проголосуйте за того, кого подозреваете в причастности к Мафии."}
                         {room.phase === 'elimination' && "Голоса подсчитаны. Кто-то покидает игру."}
-                      </p>
+                      </div>
                     </div>
                   </div>
 
-                  {room.host === peerRef.current?.id && (room.phase === 'night' || room.phase === 'day_results' || room.phase === 'day_discussion') && (
+                  {room.host === peerRef.current?.id && (room.phase === 'night' || room.phase === 'day_results' || room.phase === 'day_discussion' || room.phase === 'elimination') && (
                     <motion.button
                       whileHover={{ scale: 1.02, y: -2 }}
                       whileTap={{ scale: 0.98 }}
@@ -2823,7 +2944,7 @@ export default function App() {
                         theme.name === 'sasavot' ? "bg-red-600 text-white shadow-red-900/40" : "bg-white text-black shadow-white/10"
                       )}
                     >
-                      {room.phase === 'night' ? 'Завершить ночь' : room.phase === 'day_results' ? 'Начать обсуждение' : 'Открыть голосование'}
+                      {room.phase === 'night' ? 'Завершить ночь' : room.phase === 'day_results' ? 'Начать обсуждение' : room.phase === 'day_discussion' ? 'Открыть голосование' : 'Начать ночь'}
                     </motion.button>
                   )}
                 </div>
@@ -2881,7 +3002,7 @@ export default function App() {
                       [{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}]
                     </span>
                     <span className={cn(
-                      "font-medium transition-colors",
+                      "font-medium transition-colors flex-1 break-words",
                       log.type === 'danger' ? "text-red-400" : 
                       log.type === 'success' ? "text-green-400" : 
                       log.type === 'system' ? theme.accent : theme.muted
@@ -2909,7 +3030,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-xl p-10"
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-10"
           >
             <motion.div 
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -2983,12 +3104,7 @@ export default function App() {
         />
       )}
 
-      {/* Floating Reaction Bar */}
-      {room && room.status === 'playing' && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100]">
-          <ReactionMenu onSelect={sendReaction} />
-        </div>
-      )}
+      {/* Floating Reaction Bar removed as requested */}
 
       {/* Phase Transition Overlay */}
       <AnimatePresence>
@@ -2997,51 +3113,125 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={cn(
-              "fixed inset-0 z-[300] flex items-center justify-center overflow-hidden",
-              room.phase === 'night' ? "bg-black/95" : "bg-orange-500/95"
-            )}
+            className="fixed inset-0 z-[300] flex items-center justify-center p-6 pointer-events-none"
           >
             <motion.div
-              initial={{ scale: 2, opacity: 0, rotate: -5 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              exit={{ scale: 0.5, opacity: 0, rotate: 5 }}
-              transition={{ type: "spring", damping: 15, stiffness: 100 }}
-              className="relative text-center"
+              initial={{ scale: 0.5, opacity: 0, y: 200, rotateX: 90, filter: "blur(20px)" }}
+              animate={{ scale: 1, opacity: 1, y: 0, rotateX: 0, filter: "blur(0px)" }}
+              exit={{ scale: 1.2, opacity: 0, y: -100, rotateX: -45, filter: "blur(20px)" }}
+              transition={{ 
+                type: "spring", 
+                damping: 12, 
+                stiffness: 100,
+                filter: { duration: 0.4 }
+              }}
+              className={cn(
+                "w-full max-w-4xl border rounded-[4rem] shadow-[0_60px_150px_rgba(0,0,0,0.8)] p-12 flex flex-col items-center gap-10 relative overflow-hidden",
+                theme.card,
+                theme.border
+              )}
             >
-              <div className="absolute inset-0 blur-[120px] opacity-50 scale-150">
-                <div className={cn("w-full h-full rounded-full", room.phase === 'night' ? "bg-red-600" : "bg-white")} />
-              </div>
-              
-              <div className="relative z-10 space-y-2">
-                <motion.div
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.1 }}
+              {/* Animated background glows */}
+              <motion.div 
+                animate={{ 
+                  scale: [1, 1.2, 1],
+                  opacity: [0.2, 0.3, 0.2],
+                  rotate: [0, 90, 0]
+                }}
+                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                className={cn(
+                  "absolute -top-32 -left-32 w-80 h-80 blur-[120px] rounded-full",
+                  room.phase === 'night' ? "bg-indigo-600" : "bg-orange-400"
+                )} 
+              />
+              <motion.div 
+                animate={{ 
+                  scale: [1.2, 1, 1.2],
+                  opacity: [0.2, 0.3, 0.2],
+                  rotate: [0, -90, 0]
+                }}
+                transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                className={cn(
+                  "absolute -bottom-32 -right-32 w-80 h-80 blur-[120px] rounded-full",
+                  room.phase === 'night' ? "bg-red-600" : "bg-yellow-400"
+                )} 
+              />
+
+              <div className="flex flex-col sm:flex-row items-center gap-8 sm:gap-12 w-full relative z-10">
+                <motion.div 
+                  initial={{ rotate: -20, scale: 0.5 }}
+                  animate={{ rotate: 0, scale: 1 }}
+                  transition={{ delay: 0.2, type: "spring" }}
                   className={cn(
-                    "text-[10px] font-black uppercase tracking-[1em] mb-4",
-                    room.phase === 'night' ? "text-red-500" : "text-orange-950"
+                    "w-24 h-24 sm:w-32 sm:h-32 rounded-[2.5rem] flex items-center justify-center shadow-2xl border shrink-0 relative",
+                    room.phase === 'night' ? "bg-indigo-600/20 border-indigo-500/30" : "bg-orange-500/20 border-orange-400/30"
                   )}
                 >
-                  {room.phase === 'night' ? 'Город засыпает' : 'Город просыпается'}
+                  <div className="absolute inset-0 bg-white/5 animate-pulse-slow rounded-[2.5rem]" />
+                  {room.phase === 'night' && <Moon className="w-12 h-12 sm:w-16 sm:h-16 text-indigo-400 relative z-10" />}
+                  {(room.phase === 'day_results' || room.phase === 'day_discussion') && <Sun className="w-12 h-12 sm:w-16 sm:h-16 text-orange-400 relative z-10" />}
+                  {room.phase === 'voting' && <Vote className="w-12 h-12 sm:w-16 sm:h-16 text-red-400 relative z-10" />}
+                  {room.phase === 'elimination' && <AlertCircle className="w-12 h-12 sm:w-16 sm:h-16 text-yellow-400 relative z-10" />}
+                  {room.phase === 'game_over' && <Trophy className="w-12 h-12 sm:w-16 sm:h-16 text-yellow-500 relative z-10" />}
+                  {room.phase === 'waiting' && <Users className="w-12 h-12 sm:w-16 sm:h-16 text-zinc-400 relative z-10" />}
                 </motion.div>
-                
-                <h2 className={cn(
-                  "text-[15vw] font-black uppercase italic tracking-tighter leading-[0.8] font-display",
-                  room.phase === 'night' ? "text-white" : "text-orange-950"
-                )}>
-                  {PHASE_NAMES[room.phase]}
-                </h2>
-                
+
+                <div className="flex flex-col items-center sm:items-start text-center sm:text-left min-w-0 flex-1">
+                  <motion.h2 
+                    initial={{ x: 50, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className={cn(
+                      "text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black uppercase italic tracking-tighter leading-none font-display whitespace-nowrap drop-shadow-2xl",
+                      room.phase === 'night' ? "text-indigo-400" : theme.accent
+                    )}
+                  >
+                    {PHASE_NAMES[room.phase]}
+                  </motion.h2>
+                  <motion.span 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 0.4 }}
+                    transition={{ delay: 0.5 }}
+                    className="text-[12px] font-black uppercase tracking-[0.6em] mt-4"
+                  >
+                    Фаза игры
+                  </motion.span>
+                </div>
+              </div>
+
+              <div className="w-full h-px bg-white/10 relative z-10" />
+
+              <motion.p 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+                className={cn(
+                  "text-xl md:text-2xl font-medium text-center leading-relaxed max-w-md relative z-10",
+                  theme.muted
+                )}
+              >
+                {PHASE_DESCRIPTIONS[room.phase]}
+              </motion.p>
+
+              <div className="w-full px-4 relative z-10">
                 <motion.div
                   initial={{ scaleX: 0 }}
                   animate={{ scaleX: 1 }}
-                  transition={{ delay: 0.3, duration: 0.8 }}
+                  transition={{ delay: 0.4, duration: 1.2, ease: "circOut" }}
                   className={cn(
-                    "h-1 w-full mx-auto",
-                    room.phase === 'night' ? "bg-red-600" : "bg-orange-950"
+                    "h-2 w-full rounded-full overflow-hidden bg-white/5",
                   )}
-                />
+                >
+                  <motion.div 
+                    initial={{ x: "-100%" }}
+                    animate={{ x: "0%" }}
+                    transition={{ duration: 2, ease: "linear" }}
+                    className={cn(
+                      "h-full w-full shadow-[0_0_20px_rgba(255,255,255,0.3)]",
+                      room.phase === 'night' ? "bg-indigo-500" : theme.accentBg
+                    )}
+                  />
+                </motion.div>
               </div>
             </motion.div>
           </motion.div>
@@ -3057,7 +3247,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowMusicSettings(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              className="absolute inset-0 bg-black/80"
             />
             <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
