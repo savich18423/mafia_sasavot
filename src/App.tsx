@@ -16,6 +16,7 @@ import { Toaster, toast } from 'sonner';
 
 type Role = 'mafia' | 'doctor' | 'detective' | 'citizen';
 type Phase = 'waiting' | 'night' | 'day_results' | 'day_discussion' | 'voting' | 'elimination' | 'game_over';
+type GameMode = 'classic' | 'blind' | 'chaos';
 
 interface Player {
   id: string;
@@ -26,6 +27,12 @@ interface Player {
   isDisconnected?: boolean;
   disconnectTime?: number;
   sessionToken?: string;
+}
+
+interface Reaction {
+  playerId: string;
+  emoji: string;
+  timestamp: number;
 }
 
 interface GameLog {
@@ -80,6 +87,8 @@ interface Room {
   pausedBy?: string;
   pauseTimer?: number;
   musicSettings: MusicSettings;
+  gameMode: GameMode;
+  reactions: Reaction[];
 }
 
 const FRUITS = [
@@ -211,6 +220,25 @@ const MusicPlayer = ({ room, peerId, updateMusicSettings, theme }: {
   );
 };
 
+const ReactionMenu = ({ onSelect }: { onSelect: (emoji: string) => void }) => {
+  const emojis = ['👍', '👎', '😂', '😮', '😢', '🔥', '👀', '🤔', '🤫', '💀'];
+  return (
+    <div className="flex flex-wrap gap-2 p-3 bg-black/60 backdrop-blur-2xl rounded-[2rem] border border-white/10 shadow-2xl">
+      {emojis.map(emoji => (
+        <motion.button
+          key={emoji}
+          whileHover={{ scale: 1.3, rotate: [0, -10, 10, 0] }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => onSelect(emoji)}
+          className="text-2xl hover:bg-white/10 p-2 rounded-xl transition-colors"
+        >
+          {emoji}
+        </motion.button>
+      ))}
+    </div>
+  );
+};
+
 export default function App() {
   const [userType, setUserType] = useState<'none' | 'regular' | 'streamer'>(() => 
     (localStorage.getItem('mafia_user_type') as any) || 'none'
@@ -228,6 +256,15 @@ export default function App() {
   const [error, setError] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [showPhaseOverlay, setShowPhaseOverlay] = useState(false);
+
+  useEffect(() => {
+    if (room?.phase && room.phase !== 'waiting' && room.phase !== 'game_over') {
+      setShowPhaseOverlay(true);
+      const timer = setTimeout(() => setShowPhaseOverlay(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [room?.phase]);
 
   useEffect(() => {
     if (userType !== 'none') localStorage.setItem('mafia_user_type', userType);
@@ -241,6 +278,23 @@ export default function App() {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Cleanup old reactions
+  useEffect(() => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const hasOldReactions = room.reactions.some(r => now - r.timestamp > 5000);
+      if (hasOldReactions) {
+        const updatedRoom = {
+          ...room,
+          reactions: room.reactions.filter(r => now - r.timestamp <= 5000)
+        };
+        broadcast(updatedRoom);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [room?.reactions.length]);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [chatInput, setChatInput] = useState('');
@@ -257,8 +311,8 @@ export default function App() {
   const handleMusicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0] || !room) return;
     const file = e.target.files[0];
-    // Reduce limit to 3MB to be safer with localStorage/PeerJS and avoid QuotaExceededError
-    if (file.size > 3 * 1024 * 1024) return toast.error('Файл слишком большой (макс. 3МБ)');
+    // Increase limit to 10MB as requested
+    if (file.size > 10 * 1024 * 1024) return toast.error('Файл слишком большой (макс. 10МБ)');
     
     try {
       const base64 = await fileToBase64(file);
@@ -909,6 +963,8 @@ export default function App() {
         lastVotes: {},
         logs: [{ message: 'Комната создана. Ожидание игроков...', type: 'system', timestamp: Date.now() }],
         winner: null,
+        gameMode: 'classic',
+        reactions: [],
         musicSettings: {
           volume: 0.5,
           loop: true,
@@ -1005,12 +1061,40 @@ export default function App() {
 
   // --- Game Logic ---
 
+  const updateGameMode = (mode: GameMode) => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    const updatedRoom = { ...room, gameMode: mode };
+    broadcast(updatedRoom);
+  };
+
+  const sendReaction = (emoji: string) => {
+    if (!roomRef.current) return;
+    const me = roomRef.current.players.find(p => p.id === peerRef.current?.id);
+    if (!me) return;
+
+    const newReaction: Reaction = {
+      playerId: me.id,
+      emoji,
+      timestamp: Date.now()
+    };
+    
+    const updatedRoom = {
+      ...roomRef.current,
+      reactions: [...roomRef.current.reactions, newReaction].slice(-20)
+    };
+    broadcast(updatedRoom);
+  };
+
   const startGame = () => {
     if (!room) return;
     if (room.players.length < 5) return toast.error('Нужно минимум 5 игроков');
 
     const shuffled = [...room.players].sort(() => 0.5 - Math.random());
-    const mafiaCount = Math.max(1, Math.floor(room.players.length / 4));
+    
+    let mafiaCount = Math.max(1, Math.floor(room.players.length / 4));
+    if (room.gameMode === 'chaos') {
+      mafiaCount = 3;
+    }
     
     const updatedPlayers = room.players.map(p => {
       const index = shuffled.findIndex(s => s.id === p.id);
@@ -1028,8 +1112,8 @@ export default function App() {
       players: updatedPlayers,
       nightActions: { mafiaTarget: null, doctorTarget: null, detectiveTarget: null },
       logs: [
-        { message: `Игра началась. Игроков: ${room.players.length}.`, type: 'system', timestamp: Date.now() },
-        { message: 'Игра началась! Наступила ночь.', type: 'system', timestamp: Date.now() + 1 },
+        { message: `Игра началась! Режим: ${room.gameMode === 'classic' ? 'Классический' : room.gameMode === 'blind' ? 'Вслепую' : 'Рубилово (3 Мафии)'}`, type: 'system', timestamp: Date.now() },
+        { message: 'Наступила ночь. Город засыпает...', type: 'info', timestamp: Date.now() },
         ...room.logs
       ]
     };
@@ -1156,7 +1240,8 @@ export default function App() {
     if (mafiaTarget && mafiaTarget !== doctorTarget) {
       killedId = mafiaTarget;
       const victim = currentRoom.players.find(p => p.id === killedId);
-      logMessage = `${victim?.name} был убит этой ночью.`;
+      const roleReveal = currentRoom.gameMode === 'blind' ? '???' : ROLE_NAMES[victim?.role || 'citizen'];
+      logMessage = `${victim?.name} был убит этой ночью. Роль: ${roleReveal}`;
     } else if (mafiaTarget && mafiaTarget === doctorTarget) {
       logMessage = 'Мафия пыталась совершить убийство, но Доктор спас жертву!';
     }
@@ -1256,7 +1341,8 @@ export default function App() {
     if (eliminatedId && !tie) {
       const victim = currentRoom.players.find(p => p.id === eliminatedId);
       const roleMap: Record<string, string> = { 'mafia': 'Мафией', 'doctor': 'Доктором', 'detective': 'Детективом', 'citizen': 'Мирным жителем' };
-      logMessage = `${victim?.name} был исключен голосованием. Он был ${roleMap[victim?.role || 'citizen']}.`;
+      const roleReveal = currentRoom.gameMode === 'blind' ? '???' : roleMap[victim?.role || 'citizen'];
+      logMessage = `${victim?.name} был исключен голосованием. Роль: ${roleReveal}`;
     }
 
     const updatedPlayers = currentRoom.players.map(p => 
@@ -2113,6 +2199,24 @@ export default function App() {
                   room.phase === 'night' && me?.role === 'mafia' && player.role === 'mafia' && "border-red-600/50 shadow-[0_0_30px_rgba(220,38,38,0.2)]"
                 )}
               >
+                {/* Reactions Overlay */}
+                <div className="absolute top-8 right-8 z-[60] flex flex-col gap-4 pointer-events-none">
+                  <AnimatePresence>
+                    {room.reactions
+                      .filter(r => r.playerId === player.id && Date.now() - r.timestamp < 3000)
+                      .map(reaction => (
+                        <motion.div
+                          key={reaction.timestamp}
+                          initial={{ opacity: 0, scale: 0, y: 20, rotate: -20 }}
+                          animate={{ opacity: 1, scale: 2, y: -60, rotate: 0 }}
+                          exit={{ opacity: 0, scale: 0.5, y: -120, rotate: 20 }}
+                          className="text-5xl filter drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]"
+                        >
+                          {reaction.emoji}
+                        </motion.div>
+                      ))}
+                  </AnimatePresence>
+                </div>
                 <div className="aspect-[3/4] relative">
                   <FruitFace
                     stream={player.id === peerRef.current?.id ? localStream : peerStreams[player.id]}
@@ -2224,6 +2328,31 @@ export default function App() {
                         animate={{ width: `${(room.players.length / 5) * 100}%` }}
                         className={cn("h-full transition-colors", theme.accent.replace('text-', 'bg-'))}
                       />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Режим игры</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {[
+                        { id: 'classic', name: 'Классика', desc: 'Стандартные правила' },
+                        { id: 'blind', name: 'Вслепую', desc: 'Роли не раскрываются' },
+                        { id: 'chaos', name: 'Рубилово', desc: 'Всегда 3 мафии' }
+                      ].map(mode => (
+                        <button
+                          key={mode.id}
+                          onClick={() => updateGameMode(mode.id as GameMode)}
+                          className={cn(
+                            "p-4 rounded-2xl border text-left transition-all group",
+                            room.gameMode === mode.id 
+                              ? "bg-white/10 border-white/20" 
+                              : "border-transparent hover:bg-white/5"
+                          )}
+                        >
+                          <p className={cn("text-xs font-black uppercase tracking-wider", room.gameMode === mode.id ? theme.accent : theme.text)}>{mode.name}</p>
+                          <p className="text-[9px] font-medium opacity-40 group-hover:opacity-60 transition-opacity">{mode.desc}</p>
+                        </button>
+                      ))}
                     </div>
                   </div>
                   
@@ -2453,6 +2582,54 @@ export default function App() {
           theme={theme} 
         />
       )}
+
+      {/* Floating Reaction Bar */}
+      {room && room.status === 'playing' && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100]">
+          <ReactionMenu onSelect={sendReaction} />
+        </div>
+      )}
+
+      {/* Phase Transition Overlay */}
+      <AnimatePresence>
+        {showPhaseOverlay && room && (
+          <motion.div
+            initial={{ opacity: 0, scale: 1.2 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className={cn(
+              "fixed inset-0 z-[200] flex items-center justify-center backdrop-blur-3xl",
+              room.phase === 'night' ? "bg-black/90" : "bg-white/90"
+            )}
+          >
+            <motion.div
+              initial={{ y: 50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-center space-y-8"
+            >
+              <div className={cn(
+                "w-32 h-32 mx-auto rounded-full flex items-center justify-center border-4 animate-pulse",
+                room.phase === 'night' ? "border-red-600 bg-red-600/20" : "border-orange-500 bg-orange-500/20"
+              )}>
+                {room.phase === 'night' ? <Moon className="w-16 h-16 text-red-600" /> : <Sun className="w-16 h-16 text-orange-500" />}
+              </div>
+              <h2 className={cn(
+                "text-8xl font-black uppercase italic tracking-tighter",
+                room.phase === 'night' ? "text-white" : "text-black"
+              )}>
+                {PHASE_NAMES[room.phase]}
+              </h2>
+              <p className={cn(
+                "text-xl font-bold uppercase tracking-[0.5em] opacity-50",
+                room.phase === 'night' ? "text-white" : "text-black"
+              )}>
+                {room.phase === 'night' ? 'Город засыпает...' : 'Город просыпается...'}
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Music Settings Modal */}
       <AnimatePresence>
