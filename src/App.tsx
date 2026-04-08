@@ -27,6 +27,7 @@ interface Player {
   isDisconnected?: boolean;
   disconnectTime?: number;
   sessionToken?: string;
+  isBot?: boolean;
 }
 
 interface Reaction {
@@ -95,6 +96,12 @@ const FRUITS = [
   'watermelon', 'apple', 'orange', 'grapefruit', 'pomelo', 
   'lemon', 'lime', 'guava', 'apricot', 'tangerine',
   'strawberry', 'blueberry', 'cherry', 'banana', 'pineapple', 'mango'
+];
+
+const BOT_NAMES = [
+  'Алексей', 'Мария', 'Иван', 'Елена', 'Дмитрий', 'Ольга', 'Сергей', 'Анна', 
+  'Николай', 'Татьяна', 'Андрей', 'Наталья', 'Виктор', 'Светлана', 'Михаил', 'Юлия',
+  'Артем', 'Ксения', 'Павел', 'Ирина', 'Денис', 'Алина', 'Роман', 'Дарья'
 ];
 
 const ROLE_NAMES: Record<Role, string> = {
@@ -441,6 +448,7 @@ export default function App() {
   const [actionCount, setActionCount] = useState(0);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [botCount, setBotCount] = useState(4);
   const [room, setRoom] = useState<Room | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [peerStreams, setPeerStreams] = useState<Record<string, MediaStream>>({});
@@ -452,7 +460,7 @@ export default function App() {
   useEffect(() => {
     if (room?.phase && room.phase !== 'waiting' && room.phase !== 'game_over') {
       setShowPhaseOverlay(true);
-      const timer = setTimeout(() => setShowPhaseOverlay(false), 3000);
+      const timer = setTimeout(() => setShowPhaseOverlay(false), 2000);
       return () => clearTimeout(timer);
     }
   }, [room?.phase]);
@@ -728,9 +736,41 @@ export default function App() {
       setLocalStream(stream);
       return stream;
     } catch (err) {
-      toast.error('Доступ к камере/микрофону запрещен');
-      setError('Доступ к камере/микрофону запрещен');
-      return null;
+      console.warn('Camera/Mic access denied, creating empty stream:', err);
+      
+      // Create a silent audio track and a black video track if possible, 
+      // or just return a dummy stream so the game can continue.
+      try {
+        // Create a dummy canvas for a black video stream
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = 'black';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        const videoStream = canvas.captureStream(1);
+        const videoTrack = videoStream.getVideoTracks()[0];
+        
+        // Create a silent audio track
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const dst = audioCtx.createMediaStreamDestination();
+        oscillator.connect(dst);
+        const audioTrack = dst.stream.getAudioTracks()[0];
+        audioTrack.enabled = false; // Keep it silent
+        
+        const dummyStream = new MediaStream([videoTrack, audioTrack]);
+        setLocalStream(dummyStream);
+        
+        toast.info('Вход без камеры и микрофона');
+        return dummyStream;
+      } catch (dummyErr) {
+        console.error('Failed to create dummy stream:', dummyErr);
+        toast.error('Не удалось инициализировать медиа-поток');
+        return null;
+      }
     }
   };
 
@@ -1285,6 +1325,165 @@ export default function App() {
     const updatedRoom = { ...room, gameMode: mode };
     broadcast(updatedRoom);
   };
+
+  const addBots = (count: number) => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    
+    const currentPlayers = room.players;
+    const availableFruits = FRUITS.filter(f => !currentPlayers.map(p => p.fruit).includes(f));
+    const availableNames = BOT_NAMES.filter(n => !currentPlayers.map(p => p.name).includes(n));
+    
+    const newBots: Player[] = [];
+    for (let i = 0; i < count; i++) {
+      if (currentPlayers.length + newBots.length >= room.maxPlayers) break;
+      
+      const fruit = availableFruits[i % availableFruits.length] || 'orange';
+      const name = availableNames[i % availableNames.length] || `Бот ${i + 1}`;
+      
+      newBots.push({
+        id: `bot-${Math.random().toString(36).substring(2, 9)}`,
+        name: name,
+        role: null,
+        isAlive: true,
+        fruit,
+        isBot: true,
+        sessionToken: `bot-token-${Math.random().toString(36).substring(2, 9)}`
+      });
+    }
+    
+    const updatedRoom = {
+      ...room,
+      players: [...currentPlayers, ...newBots],
+      logs: [{ message: `Добавлено ${newBots.length} ботов`, type: 'system', timestamp: Date.now() }, ...room.logs]
+    };
+    broadcast(updatedRoom);
+  };
+
+  const removeBots = () => {
+    if (!room || room.host !== peerRef.current?.id) return;
+    const updatedRoom = {
+      ...room,
+      players: room.players.filter(p => !p.isBot),
+      logs: [{ message: 'Все боты удалены', type: 'system', timestamp: Date.now() }, ...room.logs]
+    };
+    broadcast(updatedRoom);
+  };
+
+  // Bot Logic
+  useEffect(() => {
+    if (!room || room.host !== peerRef.current?.id || room.status !== 'playing') return;
+
+    const bots = room.players.filter(p => p.isBot && p.isAlive);
+    if (bots.length === 0) return;
+
+    const botActionTimeout = setTimeout(() => {
+      const currentRoom = roomRef.current;
+      if (!currentRoom) return;
+      
+      const updatedRoom = { ...currentRoom };
+      let changed = false;
+
+      // Night actions
+      if (updatedRoom.phase === 'night') {
+        bots.forEach(bot => {
+          if (bot.role === 'mafia' && !updatedRoom.nightActions.mafiaTarget) {
+            const targets = updatedRoom.players.filter(p => p.isAlive && p.role !== 'mafia');
+            if (targets.length > 0) {
+              const target = targets[Math.floor(Math.random() * targets.length)];
+              updatedRoom.nightActions.mafiaTarget = target.id;
+              updatedRoom.logs = [{ message: `Мафия выбрала цель: ${target.name}.`, type: 'system', timestamp: Date.now() }, ...updatedRoom.logs];
+              changed = true;
+            }
+          }
+          if (bot.role === 'doctor' && !updatedRoom.nightActions.doctorTarget) {
+            const targets = updatedRoom.players.filter(p => p.isAlive);
+            if (targets.length > 0) {
+              const target = targets[Math.floor(Math.random() * targets.length)];
+              updatedRoom.nightActions.doctorTarget = target.id;
+              updatedRoom.logs = [{ message: `Доктор решил защитить: ${target.name}.`, type: 'system', timestamp: Date.now() }, ...updatedRoom.logs];
+              changed = true;
+            }
+          }
+          if (bot.role === 'detective' && !updatedRoom.nightActions.detectiveTarget) {
+            const targets = updatedRoom.players.filter(p => p.isAlive && p.id !== bot.id && !updatedRoom.detectiveResults[p.id]);
+            if (targets.length > 0) {
+              const target = targets[Math.floor(Math.random() * targets.length)];
+              updatedRoom.nightActions.detectiveTarget = target.id;
+              updatedRoom.logs = [{ message: `Детектив проверил: ${target.name}.`, type: 'system', timestamp: Date.now() }, ...updatedRoom.logs];
+              changed = true;
+            }
+          }
+        });
+
+        if (changed) {
+          const aliveMafia = updatedRoom.players.some(p => p.role === 'mafia' && p.isAlive);
+          const aliveDoctor = updatedRoom.players.some(p => p.role === 'doctor' && p.isAlive);
+          const aliveDetective = updatedRoom.players.some(p => p.role === 'detective' && p.isAlive);
+
+          const mafiaActed = !aliveMafia || updatedRoom.nightActions.mafiaTarget;
+          const doctorActed = !aliveDoctor || updatedRoom.nightActions.doctorTarget;
+          const detectiveActed = !aliveDetective || updatedRoom.nightActions.detectiveTarget;
+
+          if (mafiaActed && doctorActed && detectiveActed) {
+            resolveNight(updatedRoom);
+            return;
+          }
+        }
+      }
+
+      // Voting
+      if (updatedRoom.phase === 'voting') {
+        bots.forEach(bot => {
+          if (!updatedRoom.votes[bot.id]) {
+            const targets = updatedRoom.players.filter(p => p.isAlive && p.id !== bot.id);
+            if (targets.length > 0) {
+              const target = targets[Math.floor(Math.random() * targets.length)];
+              updatedRoom.votes[bot.id] = target.id;
+              updatedRoom.logs = [{ message: `${bot.name} проголосовал.`, type: 'info', timestamp: Date.now() }, ...updatedRoom.logs];
+              changed = true;
+            }
+          }
+        });
+
+        if (changed) {
+          const aliveCount = updatedRoom.players.filter(p => p.isAlive).length;
+          if (Object.keys(updatedRoom.votes).length === aliveCount) {
+            resolveVoting(updatedRoom);
+            return;
+          }
+        }
+      }
+
+      // Bot Chat Messages
+      if (updatedRoom.phase === 'day_discussion' && Math.random() < 0.1) {
+        const randomBot = bots[Math.floor(Math.random() * bots.length)];
+        const messages = [
+          'Я думаю, это кто-то из новеньких...',
+          'Подозрительно как-то всё это.',
+          'Кто мафия? Признавайтесь!',
+          'Я точно мирный житель.',
+          'Давайте голосовать аккуратно.',
+          'Мне кажется, я видел что-то странное ночью.',
+          'Кто-нибудь еще заметил подозрительное поведение?',
+          'Я верю Детективу, если он есть.'
+        ];
+        const newMessage: ChatMessage = {
+          senderId: randomBot.id,
+          senderName: randomBot.name,
+          text: messages[Math.floor(Math.random() * messages.length)],
+          timestamp: Date.now()
+        };
+        updatedRoom.chat = [...updatedRoom.chat, newMessage];
+        changed = true;
+      }
+
+      if (changed) {
+        broadcast(updatedRoom);
+      }
+    }, 5000 + Math.random() * 5000);
+
+    return () => clearTimeout(botActionTimeout);
+  }, [room?.phase, room?.status, room?.nightActions, room?.votes]);
 
   const sendReaction = (emoji: string) => {
     if (!roomRef.current) return;
@@ -2225,77 +2424,75 @@ export default function App() {
       </AnimatePresence>
 
       {/* Header */}
-      <header className={cn("h-24 border-b flex items-center justify-between px-10 backdrop-blur-3xl sticky top-0 z-50 ring-1 ring-white/5", theme.header, theme.border)}>
-        <div className="flex items-center gap-8">
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            className="flex flex-col cursor-default"
-          >
-            <h2 className="text-4xl font-black italic tracking-tighter uppercase leading-none">
+      <header className={cn(
+        "h-24 border-b flex items-center justify-between px-10 backdrop-blur-3xl sticky top-0 z-50 ring-1 ring-white/5",
+        theme.header,
+        theme.border
+      )}>
+        <div className="flex items-center gap-10">
+          <div className="flex flex-col">
+            <h1 className="text-3xl font-black italic uppercase tracking-tighter leading-none font-display">
               Фруктовая <span className={theme.accent}>Мафия</span>
-            </h2>
-            <span className={cn("text-[8px] font-black tracking-[0.5em] uppercase mt-1", theme.muted)}>Социальная дедукция в AR</span>
-          </motion.div>
+            </h1>
+            <p className={cn("text-[8px] font-black tracking-[0.4em] uppercase opacity-40 mt-1", theme.muted)}>Социальная дедукция в AR</p>
+          </div>
+          
           <div className="h-10 w-px bg-white/10" />
-          <div className="flex items-center gap-4">
-            <div className={cn("flex items-center gap-3 px-5 py-2.5 rounded-2xl border shadow-inner group transition-colors", theme.card, theme.border)}>
-              <Users className={cn("w-4 h-4 group-hover:scale-110 transition-transform", theme.accent)} />
-              <span className="text-xs font-black tracking-widest uppercase">{room.players.length} <span className={theme.muted}>/ {room.maxPlayers}</span></span>
+          
+          <div className="flex items-center gap-6">
+            <div className={cn("flex items-center gap-3 px-5 py-2 rounded-2xl border bg-white/5", theme.border)}>
+              <Users className={cn("w-4 h-4", theme.accent)} />
+              <span className="text-sm font-black tabular-nums">{room.players.length} / {room.maxPlayers}</span>
             </div>
-            <div className={cn("flex items-center gap-3 px-5 py-2.5 rounded-2xl border shadow-inner group transition-colors", theme.card, theme.border)}>
-              <div className={cn(
-                "w-2 h-2 rounded-full animate-pulse",
-                room.status === 'playing' ? "bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" : cn(theme.accentBg, "shadow-[0_0_10px_rgba(249,115,22,0.5)]")
-              )} />
-              <span className="text-xs font-black tracking-widest uppercase">{STATUS_NAMES[room.status]}</span>
+            
+            <div className={cn("flex items-center gap-3 px-5 py-2 rounded-2xl border bg-white/5", theme.border)}>
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
+              <span className="text-[10px] font-black uppercase tracking-widest">В игре</span>
             </div>
 
-            <div className="h-10 w-px bg-white/10" />
-            
-            {/* Music Controller in Header */}
-            <div className={cn("flex items-center gap-4 px-5 py-2.5 rounded-2xl border shadow-inner group transition-colors", theme.card, theme.border)}>
-              <Music className={cn("w-4 h-4", room.musicSettings?.isPlaying ? "text-indigo-400 animate-pulse" : theme.muted)} />
-              <div className="flex flex-col min-w-[100px]">
-                <span className={cn("text-[8px] font-black tracking-[0.2em] uppercase", theme.muted)}>Музыка</span>
-                <span className="text-[10px] font-bold truncate max-w-[120px]">
-                  {room.musicSettings?.playlist?.find(t => t.id === room.musicSettings?.currentTrackId)?.name || 'Тишина'}
+            <div className={cn("flex items-center gap-4 px-5 py-2 rounded-2xl border bg-white/5 group relative", theme.border)}>
+              <Music className={cn("w-4 h-4", theme.accent)} />
+              <div className="flex flex-col">
+                <span className={cn("text-[8px] font-black uppercase tracking-widest opacity-40", theme.muted)}>Музыка</span>
+                <span className="text-[10px] font-bold truncate max-w-[80px]">
+                  {room.musicSettings?.playlist.find(t => t.id === room.musicSettings?.currentTrackId)?.name || 'Тишина'}
                 </span>
               </div>
-              <button
+              <button 
                 onClick={() => setShowMusicSettings(true)}
-                className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+                className="absolute inset-0 flex items-center justify-center bg-black/80 opacity-0 group-hover:opacity-100 transition-all rounded-2xl"
               >
-                <Settings className="w-3 h-3 opacity-50 hover:opacity-100" />
+                <Settings className="w-4 h-4 text-white animate-spin-slow" />
               </button>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
-          <div className={cn("flex items-center gap-3 px-6 py-3 rounded-2xl border", theme.card, theme.border)}>
-            <span className={cn("text-[10px] font-black tracking-[0.2em] uppercase opacity-60", theme.accent)}>Текущая фаза</span>
-            <span className={cn("text-sm font-black tracking-widest uppercase italic", theme.accent)}>{PHASE_NAMES[room.phase]}</span>
+          <div className={cn("flex items-center gap-3 px-6 py-3 rounded-2xl border bg-white/5 backdrop-blur-md shadow-xl", theme.border)}>
+            <span className={cn("text-[10px] font-black tracking-[0.2em] uppercase opacity-60 font-display", theme.accent)}>Текущая фаза</span>
+            <span className={cn("text-sm font-black tracking-widest uppercase italic font-display", theme.accent)}>{PHASE_NAMES[room.phase]}</span>
           </div>
           
           <div className="flex items-center gap-2">
             <button 
               onClick={copyCode}
-              className={cn("px-6 py-3 transition-all rounded-2xl border flex items-center gap-4 group active:scale-95", theme.card, theme.border)}
+              className={cn("px-6 py-3 transition-all rounded-2xl border flex items-center gap-4 group active:scale-95 bg-white/5 hover:bg-white/10", theme.border)}
             >
               <div className="flex flex-col items-start">
                 <span className={cn("text-[8px] font-black tracking-widest uppercase", theme.muted)}>Код комнаты</span>
-                <span className="text-sm font-mono font-black">
+                <span className="text-sm font-mono font-black tracking-tighter">
                   {room.id}
                 </span>
               </div>
-              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+              <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors border border-white/5">
                 {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className={cn("w-4 h-4 group-hover:text-white", theme.muted)} />}
               </div>
             </button>
             
             <button 
               onClick={leaveRoom}
-              className={cn("w-12 h-12 flex items-center justify-center transition-all rounded-2xl border active:scale-95", theme.card, theme.border, "hover:bg-red-900/40 text-zinc-600 hover:text-red-500")}
+              className={cn("w-12 h-12 flex items-center justify-center transition-all rounded-2xl border active:scale-95 bg-white/5 hover:bg-red-500/20 border-white/5 text-zinc-600 hover:text-red-500")}
               title="Покинуть комнату"
             >
               <LogOut className="w-5 h-5" />
@@ -2320,7 +2517,7 @@ export default function App() {
                   "relative group rounded-[3rem] overflow-hidden border-4 transition-all duration-700",
                   player.isAlive 
                     ? cn(theme.border, "shadow-2xl hover:border-orange-500/30 hover:shadow-orange-500/20") 
-                    : "border-red-900/30 grayscale opacity-40",
+                    : "border-red-900/10 opacity-60",
                   room.phase === 'night' && me?.role === 'mafia' && player.role === 'mafia' && "border-red-600/50 shadow-[0_0_30px_rgba(220,38,38,0.2)]"
                 )}
               >
@@ -2344,10 +2541,11 @@ export default function App() {
                 </div>
                 <div className="aspect-[3/4] relative">
                   <FruitFace
-                    stream={player.id === peerRef.current?.id ? localStream : peerStreams[player.id]}
+                    stream={player.isBot ? null : (player.id === peerRef.current?.id ? localStream : peerStreams[player.id])}
                     fruitType={player.fruit}
                     isLocal={player.id === peerRef.current?.id}
                     playerName={player.name}
+                    isAlive={player.isAlive}
                     theme={theme}
                     status={
                       room.phase === 'night' && me?.role === 'mafia' && room.nightActions.mafiaTarget === player.id ? 'targeted' :
@@ -2359,38 +2557,44 @@ export default function App() {
                     scale={1.5}
                   />
                   
+                  {player.isBot && (
+                    <div className="absolute top-8 left-8 z-50 px-4 py-1.5 bg-purple-600/20 backdrop-blur-xl rounded-xl border border-purple-400/30 shadow-[0_0_20px_rgba(147,51,234,0.3)]">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-200 font-display">BOT</span>
+                    </div>
+                  )}
+                  
                   {/* Action Button Overlay */}
                   {room.status === 'playing' && me?.isAlive && player.isAlive && player.id !== me.id && (
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center p-10 z-40 backdrop-blur-sm">
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center p-12 z-40 backdrop-blur-md">
                       <div className="w-full space-y-4">
                         {room.phase === 'night' && (
                           <>
                             {me.role === 'mafia' && (
                               <motion.button 
-                                whileHover={{ scale: 1.05 }}
+                                whileHover={{ scale: 1.05, y: -5 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => handleNightAction(player.id)}
-                                className="w-full py-5 bg-red-600 hover:bg-red-500 rounded-[1.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-[0_20px_40px_rgba(220,38,38,0.4)] text-white border border-red-400/30"
+                                className="w-full py-6 bg-red-600 hover:bg-red-500 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-[0_20px_40px_rgba(220,38,38,0.4)] text-white border border-red-400/30 font-display"
                               >
                                 Устранить
                               </motion.button>
                             )}
                             {me.role === 'doctor' && (
                               <motion.button 
-                                whileHover={{ scale: 1.05 }}
+                                whileHover={{ scale: 1.05, y: -5 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => handleNightAction(player.id)}
-                                className="w-full py-5 bg-green-600 hover:bg-green-500 rounded-[1.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-[0_20px_40px_rgba(34,197,94,0.4)] text-white border border-green-400/30"
+                                className="w-full py-6 bg-green-600 hover:bg-green-500 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-[0_20px_40px_rgba(34,197,94,0.4)] text-white border border-green-400/30 font-display"
                               >
                                 Защитить
                               </motion.button>
                             )}
                             {me.role === 'detective' && (
                               <motion.button 
-                                whileHover={{ scale: 1.05 }}
+                                whileHover={{ scale: 1.05, y: -5 }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={() => handleNightAction(player.id)}
-                                className="w-full py-5 bg-blue-600 hover:bg-blue-500 rounded-[1.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-[0_20px_40px_rgba(37,99,235,0.4)] text-white border border-blue-400/30"
+                                className="w-full py-6 bg-blue-600 hover:bg-blue-500 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-[0_20px_40px_rgba(37,99,235,0.4)] text-white border border-blue-400/30 font-display"
                               >
                                 Проверить
                               </motion.button>
@@ -2399,11 +2603,11 @@ export default function App() {
                         )}
                         {room.phase === 'voting' && (
                           <motion.button 
-                            whileHover={{ scale: 1.05 }}
+                            whileHover={{ scale: 1.05, y: -5 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => castVote(player.id)}
                             className={cn(
-                              "w-full py-5 rounded-[1.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl transition-all border",
+                              "w-full py-6 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl transition-all border font-display",
                               room.votes[me.id] === player.id 
                                 ? "bg-orange-600 text-white border-orange-400/30 shadow-[0_20px_40px_rgba(234,88,12,0.4)]" 
                                 : "bg-white text-black border-white/20 hover:bg-zinc-200"
@@ -2453,6 +2657,43 @@ export default function App() {
                         animate={{ width: `${(room.players.length / 5) * 100}%` }}
                         className={cn("h-full transition-colors", theme.accent.replace('text-', 'bg-'))}
                       />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Игра с ботами</p>
+                    <div className={cn("p-4 rounded-2xl border space-y-4", theme.card, theme.border)}>
+                      <div className="flex items-center justify-between">
+                        <span className={cn("text-xs font-bold", theme.text)}>{botCount} ботов</span>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setBotCount(Math.max(4, botCount - 1))}
+                            className={cn("w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-white/5", theme.border)}
+                          >
+                            -
+                          </button>
+                          <button 
+                            onClick={() => setBotCount(Math.min(11, botCount + 1))}
+                            className={cn("w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-white/5", theme.border)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => addBots(botCount)}
+                          className={cn("py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest hover:bg-white/5", theme.border, theme.accent)}
+                        >
+                          Добавить
+                        </button>
+                        <button
+                          onClick={removeBots}
+                          className={cn("py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest hover:bg-zinc-900/40 text-red-500 border-red-500/20")}
+                        >
+                          Удалить всех
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -2532,53 +2773,54 @@ export default function App() {
 
               {room.status === 'playing' && (
                 <div className="space-y-6">
-                  <div className={cn("p-8 rounded-[2rem] border space-y-6", theme.card, theme.border)}>
-                    <div className="flex items-center gap-4">
-                      <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center border", theme.accent.replace('text-', 'bg-').replace('bg-', 'bg-opacity-20 bg-'), theme.accent.replace('text-', 'border-').replace('border-', 'border-opacity-20 border-'))}>
-                        {room.phase === 'night' ? <Moon className={cn("w-6 h-6", theme.accent)} /> : <Sun className={cn("w-6 h-6", theme.accent)} />}
+                  <div className={cn("p-10 rounded-[3rem] border-2 relative overflow-hidden group", theme.card, theme.border)}>
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-50" />
+                    <div className="relative z-10 space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className={cn("p-4 rounded-2xl bg-white/5 border", theme.border)}>
+                          {room.phase === 'night' ? <Moon className="w-8 h-8 text-indigo-400" /> : <Sun className="w-8 h-8 text-orange-400" />}
+                        </div>
+                        <div>
+                          <h4 className="text-4xl font-black uppercase italic tracking-tighter font-display">{PHASE_NAMES[room.phase]}</h4>
+                          <p className={cn("text-[10px] font-black uppercase tracking-[0.3em]", theme.muted)}>Фаза игры</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Текущая фаза</p>
-                        <p className={cn("text-xl font-black uppercase italic tracking-tighter", theme.text)}>{PHASE_NAMES[room.phase]}</p>
-                      </div>
-                    </div>
-                    
-                    <p className={cn("text-xs leading-relaxed font-medium", theme.muted)}>
-                      {room.phase === 'night' && (
-                        <>
-                          Мафия выбирает цель. Доктор и Детектив выполняют свои обязанности.
-                          {room.host === peerRef.current?.id && (
-                            <div className={cn("mt-4 p-4 rounded-2xl border space-y-2", theme.card, theme.border)}>
-                              <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.accent)}>Ожидание действий:</p>
-                              <div className="flex flex-wrap gap-2">
-                                {room.players.some(p => p.role === 'mafia' && p.isAlive && !room.nightActions.mafiaTarget) && (
-                                  <span className="px-2 py-1 bg-red-500/20 text-red-400 text-[9px] font-bold rounded-lg border border-red-500/20">Мафия</span>
-                                )}
-                                {room.players.some(p => p.role === 'doctor' && p.isAlive && !room.nightActions.doctorTarget) && (
-                                  <span className="px-2 py-1 bg-green-500/20 text-green-400 text-[9px] font-bold rounded-lg border border-green-500/20">Доктор</span>
-                                )}
-                                {room.players.some(p => p.role === 'detective' && p.isAlive && !room.nightActions.detectiveTarget) && (
-                                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-[9px] font-bold rounded-lg border border-blue-500/20">Детектив</span>
-                                )}
-                              </div>
+                      
+                      <p className={cn("text-xs leading-relaxed font-medium", theme.text)}>
+                        {room.phase === 'night' && (
+                          <>
+                            {me?.role === 'mafia' && "Выберите цель для устранения вместе с другими членами Мафии."}
+                            {me?.role === 'doctor' && "Выберите, кого вы хотите защитить этой ночью."}
+                            {me?.role === 'detective' && "Выберите игрока, чью роль вы хотите проверить."}
+                            {me?.role === 'citizen' && "Город спит. Надейтесь, что Мафия не выберет вас."}
+                            <div className="mt-6 flex flex-wrap gap-2">
+                              {room.players.some(p => p.role === 'mafia' && p.isAlive && !room.nightActions.mafiaTarget) && (
+                                <span className="px-3 py-1.5 bg-red-500/10 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl border border-red-500/20">Мафия</span>
+                              )}
+                              {room.players.some(p => p.role === 'doctor' && p.isAlive && !room.nightActions.doctorTarget) && (
+                                <span className="px-3 py-1.5 bg-green-500/10 text-green-400 text-[10px] font-black uppercase tracking-widest rounded-xl border border-green-500/20">Доктор</span>
+                              )}
+                              {room.players.some(p => p.role === 'detective' && p.isAlive && !room.nightActions.detectiveTarget) && (
+                                <span className="px-3 py-1.5 bg-blue-500/10 text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-xl border border-blue-500/20">Детектив</span>
+                              )}
                             </div>
-                          )}
-                        </>
-                      )}
-                      {room.phase === 'day_results' && "Солнце встает. Город узнает, что произошло ночью."}
-                      {room.phase === 'voting' && "Время обсуждения. Проголосуйте за того, кого подозреваете в причастности к Мафии."}
-                      {room.phase === 'elimination' && "Голоса подсчитаны. Кто-то покидает игру."}
-                    </p>
+                          </>
+                        )}
+                        {room.phase === 'day_results' && "Солнце встает. Город узнает, что произошло ночью."}
+                        {room.phase === 'voting' && "Время обсуждения. Проголосуйте за того, кого подозреваете в причастности к Мафии."}
+                        {room.phase === 'elimination' && "Голоса подсчитаны. Кто-то покидает игру."}
+                      </p>
+                    </div>
                   </div>
 
                   {room.host === peerRef.current?.id && (room.phase === 'night' || room.phase === 'day_results' || room.phase === 'day_discussion') && (
                     <motion.button
-                      whileHover={{ scale: 1.02 }}
+                      whileHover={{ scale: 1.02, y: -2 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={room.phase === 'night' ? skipNight : nextPhase}
                       className={cn(
-                        "w-full py-6 transition-all rounded-2xl font-black uppercase tracking-widest text-xs",
-                        theme.name === 'sasavot' ? "bg-red-600 text-white" : "bg-white text-black"
+                        "w-full py-8 transition-all rounded-[2rem] font-black uppercase tracking-[0.3em] text-[10px] shadow-2xl font-display",
+                        theme.name === 'sasavot' ? "bg-red-600 text-white shadow-red-900/40" : "bg-white text-black shadow-white/10"
                       )}
                     >
                       {room.phase === 'night' ? 'Завершить ночь' : room.phase === 'day_results' ? 'Начать обсуждение' : 'Открыть голосование'}
@@ -2752,38 +2994,55 @@ export default function App() {
       <AnimatePresence>
         {showPhaseOverlay && room && (
           <motion.div
-            initial={{ opacity: 0, scale: 1.2 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             className={cn(
-              "fixed inset-0 z-[200] flex items-center justify-center backdrop-blur-3xl",
-              room.phase === 'night' ? "bg-black/90" : "bg-white/90"
+              "fixed inset-0 z-[300] flex items-center justify-center overflow-hidden",
+              room.phase === 'night' ? "bg-black/95" : "bg-orange-500/95"
             )}
           >
             <motion.div
-              initial={{ y: 50, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="text-center space-y-8"
+              initial={{ scale: 2, opacity: 0, rotate: -5 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              exit={{ scale: 0.5, opacity: 0, rotate: 5 }}
+              transition={{ type: "spring", damping: 15, stiffness: 100 }}
+              className="relative text-center"
             >
-              <div className={cn(
-                "w-32 h-32 mx-auto rounded-full flex items-center justify-center border-4 animate-pulse",
-                room.phase === 'night' ? "border-red-600 bg-red-600/20" : "border-orange-500 bg-orange-500/20"
-              )}>
-                {room.phase === 'night' ? <Moon className="w-16 h-16 text-red-600" /> : <Sun className="w-16 h-16 text-orange-500" />}
+              <div className="absolute inset-0 blur-[120px] opacity-50 scale-150">
+                <div className={cn("w-full h-full rounded-full", room.phase === 'night' ? "bg-red-600" : "bg-white")} />
               </div>
-              <h2 className={cn(
-                "text-8xl font-black uppercase italic tracking-tighter",
-                room.phase === 'night' ? "text-white" : "text-black"
-              )}>
-                {PHASE_NAMES[room.phase]}
-              </h2>
-              <p className={cn(
-                "text-xl font-bold uppercase tracking-[0.5em] opacity-50",
-                room.phase === 'night' ? "text-white" : "text-black"
-              )}>
-                {room.phase === 'night' ? 'Город засыпает...' : 'Город просыпается...'}
-              </p>
+              
+              <div className="relative z-10 space-y-2">
+                <motion.div
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.1 }}
+                  className={cn(
+                    "text-[10px] font-black uppercase tracking-[1em] mb-4",
+                    room.phase === 'night' ? "text-red-500" : "text-orange-950"
+                  )}
+                >
+                  {room.phase === 'night' ? 'Город засыпает' : 'Город просыпается'}
+                </motion.div>
+                
+                <h2 className={cn(
+                  "text-[15vw] font-black uppercase italic tracking-tighter leading-[0.8] font-display",
+                  room.phase === 'night' ? "text-white" : "text-orange-950"
+                )}>
+                  {PHASE_NAMES[room.phase]}
+                </h2>
+                
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ delay: 0.3, duration: 0.8 }}
+                  className={cn(
+                    "h-1 w-full mx-auto",
+                    room.phase === 'night' ? "bg-red-600" : "bg-orange-950"
+                  )}
+                />
+              </div>
             </motion.div>
           </motion.div>
         )}
