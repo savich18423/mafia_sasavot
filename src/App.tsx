@@ -113,6 +113,104 @@ const STATUS_NAMES: Record<string, string> = {
 
 // --- Main Component ---
 
+// --- Sub-components ---
+
+const MusicPlayer = ({ room, peerId, updateMusicSettings, theme }: { 
+  room: Room | null, 
+  peerId: string | undefined, 
+  updateMusicSettings: (settings: Partial<MusicSettings>) => void,
+  theme: any 
+}) => {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isAudioBlocked, setIsAudioBlocked] = useState(false);
+  
+  if (!room?.musicSettings) return null;
+  const { musicSettings } = room;
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    audio.volume = musicSettings.volume;
+    audio.loop = musicSettings.loop;
+    
+    if (musicSettings.isPlaying) {
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(e => {
+          // AbortError is expected when track changes or pause is called quickly
+          if (e.name === 'NotAllowedError') {
+            setIsAudioBlocked(true);
+          } else if (e.name !== 'AbortError') {
+            console.error("Audio play error:", e);
+          }
+        });
+      }
+    } else {
+      audio.pause();
+    }
+  }, [musicSettings.isPlaying, musicSettings.volume, musicSettings.loop, musicSettings.currentTrackId]);
+
+  const currentTrack = musicSettings.playlist.find(t => t.id === musicSettings.currentTrackId);
+
+  return (
+    <>
+      <audio 
+        ref={audioRef} 
+        src={currentTrack?.data} 
+        onEnded={() => {
+          if (!musicSettings.loop && room!.host === peerId) {
+            const currentIndex = musicSettings.playlist?.findIndex(t => t.id === musicSettings.currentTrackId) ?? -1;
+            const nextIndex = (currentIndex + 1) % (musicSettings.playlist?.length || 1);
+            const nextTrack = musicSettings.playlist?.[nextIndex];
+            if (nextTrack) {
+              updateMusicSettings({ currentTrackId: nextTrack.id, isPlaying: true });
+            } else {
+              updateMusicSettings({ isPlaying: false });
+            }
+          }
+        }}
+      />
+      {isAudioBlocked && musicSettings.isPlaying && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100]"
+        >
+          <button
+            onClick={() => {
+              setIsAudioBlocked(false);
+              audioRef.current?.play().catch(console.error);
+            }}
+            className={cn(
+              "flex items-center gap-3 px-6 py-3 rounded-full font-bold uppercase tracking-wider text-sm shadow-2xl border animate-bounce",
+              theme.accentBg,
+              theme.border
+            )}
+          >
+            <Volume2 className="w-5 h-5" />
+            Включить звук музыки
+          </button>
+        </motion.div>
+      )}
+      {currentTrack && !currentTrack.data && musicSettings.isPlaying && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100]"
+        >
+          <div className={cn(
+            "flex items-center gap-3 px-6 py-4 rounded-3xl font-bold uppercase tracking-wider text-[10px] shadow-2xl border bg-red-600 text-white border-red-400 max-w-xs text-center",
+          )}>
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            Файл музыки не найден. После обновления страницы музыку нужно загрузить заново.
+          </div>
+        </motion.div>
+      )}
+    </>
+  );
+};
+
 export default function App() {
   const [userType, setUserType] = useState<'none' | 'regular' | 'streamer'>(() => 
     (localStorage.getItem('mafia_user_type') as any) || 'none'
@@ -282,91 +380,6 @@ export default function App() {
     }
   }, [room]);
 
-  const MusicPlayer = () => {
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const [isAudioBlocked, setIsAudioBlocked] = useState(false);
-    
-    if (!room?.musicSettings) return null;
-    const { musicSettings } = room;
-
-    useEffect(() => {
-      if (audioRef.current) {
-        audioRef.current.volume = musicSettings.volume;
-        audioRef.current.loop = musicSettings.loop;
-        
-        if (musicSettings.isPlaying) {
-          audioRef.current.play().catch(e => {
-            console.error("Audio play error:", e);
-            if (e.name === 'NotAllowedError') {
-              setIsAudioBlocked(true);
-            }
-          });
-        } else {
-          audioRef.current.pause();
-        }
-      }
-    }, [musicSettings.isPlaying, musicSettings.volume, musicSettings.loop, musicSettings.currentTrackId]);
-
-    const currentTrack = musicSettings.playlist.find(t => t.id === musicSettings.currentTrackId);
-
-    return (
-      <>
-        <audio 
-          ref={audioRef} 
-          key={musicSettings.currentTrackId}
-          src={currentTrack?.data} 
-          onEnded={() => {
-            if (!musicSettings.loop && room!.host === peerRef.current?.id) {
-              const currentIndex = musicSettings.playlist?.findIndex(t => t.id === musicSettings.currentTrackId) ?? -1;
-              const nextIndex = (currentIndex + 1) % (musicSettings.playlist?.length || 1);
-              const nextTrack = musicSettings.playlist?.[nextIndex];
-              if (nextTrack) {
-                updateMusicSettings({ currentTrackId: nextTrack.id, isPlaying: true });
-              } else {
-                updateMusicSettings({ isPlaying: false });
-              }
-            }
-          }}
-        />
-        {isAudioBlocked && musicSettings.isPlaying && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100]"
-          >
-            <button
-              onClick={() => {
-                setIsAudioBlocked(false);
-                audioRef.current?.play().catch(console.error);
-              }}
-              className={cn(
-                "flex items-center gap-3 px-6 py-3 rounded-full font-bold uppercase tracking-wider text-sm shadow-2xl border animate-bounce",
-                theme.accentBg,
-                theme.border
-              )}
-            >
-              <Volume2 className="w-5 h-5" />
-              Включить звук музыки
-            </button>
-          </motion.div>
-        )}
-        {currentTrack && !currentTrack.data && musicSettings.isPlaying && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100]"
-          >
-            <div className={cn(
-              "flex items-center gap-3 px-6 py-4 rounded-3xl font-bold uppercase tracking-wider text-[10px] shadow-2xl border bg-red-600 text-white border-red-400 max-w-xs text-center",
-            )}>
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              Файл музыки не найден. После обновления страницы музыку нужно загрузить заново.
-            </div>
-          </motion.div>
-        )}
-      </>
-    );
-  };
   const [activeTab, setActiveTab] = useState<'chat' | 'logs'>('chat');
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showMusicSettings, setShowMusicSettings] = useState(false);
@@ -2432,7 +2445,14 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {room && <MusicPlayer />}
+      {room && (
+        <MusicPlayer 
+          room={room} 
+          peerId={peerRef.current?.id} 
+          updateMusicSettings={updateMusicSettings} 
+          theme={theme} 
+        />
+      )}
 
       {/* Music Settings Modal */}
       <AnimatePresence>
