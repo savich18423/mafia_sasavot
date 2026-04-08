@@ -281,9 +281,17 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
     
     const playVideo = async () => {
       try {
-        if (video.paused) await video.play();
-      } catch (err) {
-        console.error('Error playing video:', err);
+        if (video.paused) {
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            await playPromise;
+          }
+        }
+      } catch (err: any) {
+        // AbortError is expected if the component unmounts or stream changes
+        if (err.name !== 'AbortError') {
+          console.error('Error playing video:', err);
+        }
       }
     };
     
@@ -361,12 +369,42 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
       </div>
 
       {/* Status Overlays */}
-      {status === 'targeted' && (
-        <div className="absolute inset-0 border-4 border-red-600/50 animate-pulse pointer-events-none z-20" />
-      )}
-      {status === 'protected' && (
-        <div className="absolute inset-0 border-4 border-green-400/30 pointer-events-none z-20" />
-      )}
+      <AnimatePresence>
+        {status === 'targeted' && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 border-[12px] border-red-600/50 animate-pulse pointer-events-none z-20 shadow-[inset_0_0_100px_rgba(220,38,38,0.4)]" 
+          />
+        )}
+        {status === 'protected' && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 border-[12px] border-green-400/30 pointer-events-none z-20 shadow-[inset_0_0_100px_rgba(34,197,94,0.2)]" 
+          />
+        )}
+        {status === 'investigated_mafia' && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 2 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute inset-0 flex items-center justify-center z-30 bg-red-950/40 backdrop-blur-[2px]"
+          >
+            <Skull className="w-32 h-32 text-red-600 filter drop-shadow-[0_0_20px_rgba(220,38,38,0.8)]" />
+          </motion.div>
+        )}
+        {status === 'investigated_citizen' && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 2 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="absolute inset-0 flex items-center justify-center z-30 bg-green-950/20 backdrop-blur-[2px]"
+          >
+            <Heart className="w-32 h-32 text-green-500 filter drop-shadow-[0_0_20px_rgba(34,197,94,0.8)]" />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
