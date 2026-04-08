@@ -22,6 +22,7 @@ interface FruitFaceProps {
   fruitType: string;
   isLocal?: boolean;
   playerName: string;
+  isAlive?: boolean;
   status?: 'protected' | 'targeted' | 'investigated_mafia' | 'investigated_citizen' | null;
   theme?: any;
   scale?: number;
@@ -58,6 +59,7 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
   fruitType, 
   isLocal, 
   playerName,
+  isAlive = true,
   status,
   theme,
   scale = 3.2
@@ -330,8 +332,9 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
 
   return (
     <div className={cn(
-      "relative w-full aspect-[3/4] bg-black rounded-[3rem] overflow-hidden border-4 transition-all duration-500",
-      theme?.border || 'border-zinc-800'
+      "relative w-full aspect-[3/4] bg-black rounded-[3rem] overflow-hidden border-4 transition-all duration-700",
+      !isAlive ? "grayscale opacity-40 border-red-900/30" : (theme?.border || 'border-zinc-800'),
+      isAlive && "hover:scale-[1.02] hover:shadow-[0_0_50px_rgba(0,0,0,0.5)]"
     )}>
       <video
         ref={videoRef}
@@ -342,27 +345,68 @@ export const FruitFace: React.FC<FruitFaceProps> = ({
       />
       <canvas
         ref={canvasRef}
-        className="w-full h-full object-cover"
+        className={cn(
+          "w-full h-full object-cover transition-all duration-1000",
+          !isAlive && "sepia brightness-50"
+        )}
         width={600}
         height={800}
       />
 
+      {/* Dead Overlay */}
+      {!isAlive && (
+        <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/20 backdrop-blur-[1px]">
+          <motion.div
+            initial={{ scale: 0, rotate: -45 }}
+            animate={{ scale: 1, rotate: 0 }}
+            className="p-8 rounded-full bg-black/60 border-4 border-white/10 shadow-2xl"
+          >
+            <Skull className="w-24 h-24 text-white/20" />
+          </motion.div>
+        </div>
+      )}
+
       {/* Player Info Overlay */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10">
+      <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-black/95 via-black/60 to-transparent z-10">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-2 h-2 rounded-full animate-pulse ${isLocal ? 'bg-green-500' : 'bg-orange-500'}`} />
-            <span className={`text-base font-black uppercase tracking-widest truncate max-w-[180px] ${theme?.text || 'text-white'}`}>
-              {playerName} {isLocal && '(Вы)'}
-            </span>
+          <div className="flex items-center gap-4">
+            <div className={cn(
+              "w-2.5 h-2.5 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]",
+              !isAlive ? "bg-zinc-700" : (isLocal ? 'bg-green-500 animate-pulse' : 'bg-orange-500 animate-pulse')
+            )} />
+            <div className="flex flex-col">
+              <span className={cn(
+                "text-lg font-black uppercase tracking-widest truncate max-w-[180px] font-display",
+                !isAlive ? "text-zinc-500" : (theme?.text || 'text-white')
+              )}>
+                {playerName}
+              </span>
+              {isLocal && <span className="text-[8px] font-black uppercase tracking-widest text-white/40 -mt-1">Это вы</span>}
+            </div>
           </div>
           
-          {status && (
-            <div className="flex gap-2">
-              {status === 'protected' && <Shield className="w-6 h-6 text-green-400" />}
-              {status === 'targeted' && <Target className="w-6 h-6 text-red-400 animate-pulse" />}
-              {status === 'investigated_mafia' && <Skull className="w-6 h-6 text-red-500" />}
-              {status === 'investigated_citizen' && <Heart className="w-6 h-6 text-green-500" />}
+          {status && isAlive && (
+            <div className="flex gap-3">
+              {status === 'protected' && (
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="p-2 bg-green-500/20 rounded-xl border border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+                  <Shield className="w-5 h-5 text-green-400" />
+                </motion.div>
+              )}
+              {status === 'targeted' && (
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="p-2 bg-red-500/20 rounded-xl border border-red-500/30 shadow-[0_0_15px_rgba(220,38,38,0.3)]">
+                  <Target className="w-5 h-5 text-red-400 animate-pulse" />
+                </motion.div>
+              )}
+              {status === 'investigated_mafia' && (
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="p-2 bg-red-600/20 rounded-xl border border-red-600/30 shadow-[0_0_15px_rgba(220,38,38,0.3)]">
+                  <Skull className="w-5 h-5 text-red-500" />
+                </motion.div>
+              )}
+              {status === 'investigated_citizen' && (
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="p-2 bg-green-600/20 rounded-xl border border-green-600/30 shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+                  <Heart className="w-5 h-5 text-green-500" />
+                </motion.div>
+              )}
             </div>
           )}
         </div>
