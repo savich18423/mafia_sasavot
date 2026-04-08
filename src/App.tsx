@@ -239,6 +239,188 @@ const ReactionMenu = ({ onSelect }: { onSelect: (emoji: string) => void }) => {
   );
 };
 
+const THEMES_DATA: Record<string, any> = {
+  default: {
+    bg: 'bg-zinc-950',
+    header: 'bg-black/40',
+    card: 'bg-black/40',
+    accent: 'text-orange-500',
+    accentBg: 'bg-orange-600',
+    border: 'border-white/5',
+    text: 'text-white',
+    muted: 'text-zinc-500',
+    overlay: 'bg-indigo-950/20'
+  },
+  sasavot: {
+    bg: 'bg-red-950',
+    bgImage: 'https://media1.tenor.com/m/TO4KD8Pf5kYAAAAd/sasavot-eb2chugun.gif',
+    header: 'bg-red-900/40',
+    card: 'bg-red-900/40',
+    accent: 'text-red-500',
+    accentBg: 'bg-red-700',
+    border: 'border-red-500/20',
+    text: 'text-red-50',
+    muted: 'text-red-400/60',
+    overlay: 'bg-red-950/40',
+    style: { fontFamily: 'serif' }
+  },
+  helin139: {
+    bg: 'bg-yellow-400',
+    bgImage: 'https://media1.tenor.com/m/2xaL-1aQvPgAAAAd/uglyfacekid-helin139.gif',
+    header: 'bg-yellow-500/40',
+    card: 'bg-yellow-500/40',
+    accent: 'text-blue-600',
+    accentBg: 'bg-blue-600',
+    border: 'border-blue-500/20',
+    text: 'text-blue-900',
+    muted: 'text-blue-800/60',
+    overlay: 'bg-yellow-600/20'
+  },
+  rostikfacekid: {
+    bg: 'bg-[#0a0a0a]',
+    bgImage: 'https://media1.tenor.com/m/JTTB2p8k7IsAAAAd/uglyfacekid.gif',
+    header: 'bg-[#1a1a1a]/40',
+    card: 'bg-[#1a1a1a]/40',
+    accent: 'text-[#00ffcc]',
+    accentBg: 'bg-[#00ffcc]',
+    border: 'border-[#00ffcc]/20',
+    text: 'text-[#eaeaea]',
+    muted: 'text-zinc-500',
+    overlay: 'bg-black/60',
+    glitch: true
+  },
+  iceicell: {
+    bg: 'bg-[#f2e6d8]',
+    isLight: true,
+    bgImage: 'https://photobooth.cdn.sports.ru/preset/wysiwyg/8/e1/05bc339944cccb2addc1a3d0137f7.jpeg?f=webp&q=90&s=2x&w=730',
+    header: 'bg-[#d89aa6]/20',
+    card: 'bg-white/40',
+    accent: 'text-[#7a3b4a]',
+    accentBg: 'bg-[#d89aa6]',
+    border: 'border-[#d89aa6]/40',
+    text: 'text-[#555]',
+    muted: 'text-[#7a3b4a]/60',
+    overlay: 'bg-[#d89aa6]/10',
+    glow: 'rgba(216, 154, 166, 0.2)'
+  },
+  formixyouknow: {
+    bg: 'bg-[#111]',
+    bgVideo: 'https://vk.com/doc188558635_166709657?hash=ZMDdJhGmltRiL1M02gnlAsuKntz2K88xZD0wCY1w3r8&dl=vwBHe0QgUeeJOfpvjluZB7xWEBVfPhyvXLN8cwDeMtT&wnd=1&module=board&mp4=1',
+    header: 'bg-black/40',
+    card: 'bg-zinc-900/40',
+    accent: 'text-[#ff7a00]',
+    accentBg: 'bg-[#ff7a00]',
+    border: 'border-[#ffd000]/20',
+    text: 'text-white',
+    muted: 'text-[#ffd000]/60',
+    overlay: 'bg-orange-950/20',
+    glow: 'rgba(255, 122, 0, 0.2)'
+  },
+  yurapivo: {
+    bg: 'bg-black',
+    bgImage: 'https://static-cdn.jtvnw.net/twitch-clips-thumbnails-prod/CleverSilkyDonkeyFeelsBadMan-QxnqXdfX0Um907d_/9625e32b-a857-412d-aea4-c9fa0c07052c/preview.jpg',
+    header: 'bg-purple-900/20',
+    card: 'bg-purple-900/20',
+    accent: 'text-pink-500',
+    accentBg: 'bg-purple-600',
+    border: 'border-pink-500/20',
+    text: 'text-pink-50',
+    muted: 'text-purple-400',
+    overlay: 'bg-pink-950/20',
+    glow: 'rgba(236, 72, 153, 0.2)'
+  },
+  r4dom1r: {
+    bg: 'bg-zinc-900',
+    bgImage: 'https://i.ibb.co/fVxBc87T/2026-04-08-212052.png',
+    header: 'bg-black/60',
+    card: 'bg-black/40',
+    accent: 'text-zinc-400',
+    accentBg: 'bg-zinc-700',
+    border: 'border-white/10',
+    text: 'text-zinc-100',
+    muted: 'text-zinc-500',
+    overlay: 'bg-black/40',
+    glow: 'rgba(255, 255, 255, 0.1)'
+  },
+  tankzor: {
+    bg: 'bg-black',
+    bgImage: 'https://static-cdn.jtvnw.net/twitch-clips-thumbnails-prod/VastHilariousPieWoofer-SXASnOGvNwMTjVIZ/241daec9-f568-4d56-895c-26dc456dd0fb/preview.jpg',
+    header: 'bg-red-900/20',
+    card: 'bg-zinc-900/60',
+    accent: 'text-red-600',
+    accentBg: 'bg-red-700',
+    border: 'border-purple-500/20',
+    text: 'text-white',
+    muted: 'text-purple-400',
+    overlay: 'bg-red-950/40',
+    glow: 'rgba(220, 38, 38, 0.2)'
+  },
+  poisonika: {
+    bg: 'bg-white',
+    isLight: true,
+    bgImage: 'https://static-cdn.jtvnw.net/twitch-clips-thumbnails-prod/HandsomePiliableBarracudaPartyTime-e375qxvX8rlfAhu0/99935b1e-51b0-48b9-a2d1-c157bde3071a/preview.jpg',
+    header: 'bg-zinc-100',
+    card: 'bg-zinc-50',
+    accent: 'text-[#7a3b4a]',
+    accentBg: 'bg-[#7a3b4a]',
+    border: 'border-[#7a3b4a]/20',
+    text: 'text-zinc-900',
+    muted: 'text-zinc-500',
+    overlay: 'bg-zinc-200/40',
+    handDrawn: true,
+    glow: 'rgba(122, 59, 74, 0.1)'
+  }
+};
+
+const BackgroundAtmosphere = React.memo(({ theme, phase, disabled }: { theme: any, phase?: Phase, disabled?: boolean }) => {
+  if (disabled) return null;
+  return (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+      {theme.bgVideo ? (
+        <video
+          key={theme.bgVideo}
+          autoPlay
+          muted
+          loop
+          playsInline
+          className={cn(
+            "absolute inset-0 w-full h-full object-cover",
+            theme.isLight ? "opacity-20" : "opacity-40 mix-blend-overlay"
+          )}
+        >
+          <source src={theme.bgVideo} type="video/mp4" />
+        </video>
+      ) : theme.bgImage ? (
+        <div 
+          className={cn(
+            "absolute inset-0 bg-cover bg-center bg-no-repeat",
+            theme.isLight ? "opacity-20" : "opacity-40 mix-blend-overlay"
+          )}
+          style={{ backgroundImage: `url(${theme.bgImage})` }}
+        />
+      ) : (
+        <>
+          <motion.div 
+            animate={{ 
+              scale: phase === 'night' ? 1.2 : 1,
+              opacity: phase === 'night' ? 0.15 : 0.05
+            }}
+            className={cn("absolute top-[-10%] left-[-10%] w-[80%] h-[80%] blur-[180px] rounded-full", theme.accentBg)} 
+          />
+          <motion.div 
+            animate={{ 
+              scale: phase === 'night' ? 1.5 : 1,
+              opacity: phase === 'night' ? 0.2 : 0.05
+            }}
+            className="absolute bottom-[-10%] right-[-10%] w-[80%] h-[80%] bg-indigo-600 blur-[180px] rounded-full" 
+          />
+        </>
+      )}
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] mix-blend-overlay" />
+    </div>
+  );
+});
+
 export default function App() {
   const [userType, setUserType] = useState<'none' | 'regular' | 'streamer'>(() => 
     (localStorage.getItem('mafia_user_type') as any) || 'none'
@@ -246,9 +428,18 @@ export default function App() {
   const [selectedTheme, setSelectedTheme] = useState<string>(() => 
     localStorage.getItem('mafia_theme') || 'default'
   );
+  const [disableCustomBackground, setDisableCustomBackground] = useState<boolean>(() => 
+    localStorage.getItem('mafia_disable_bg') === 'true'
+  );
+  const [customBgUrl, setCustomBgUrl] = useState<string>(() => 
+    localStorage.getItem('mafia_custom_bg') || ''
+  );
   const [playerName, setPlayerName] = useState('');
   const [roomId, setRoomId] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+  const [lastActionTime, setLastActionTime] = useState(0);
+  const [actionCount, setActionCount] = useState(0);
+  const [isRateLimited, setIsRateLimited] = useState(false);
   const [copied, setCopied] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -273,6 +464,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('mafia_theme', selectedTheme);
   }, [selectedTheme]);
+
+  useEffect(() => {
+    localStorage.setItem('mafia_custom_bg', customBgUrl);
+  }, [customBgUrl]);
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -927,7 +1122,30 @@ export default function App() {
     });
   };
 
+  const checkRateLimit = () => {
+    const now = Date.now();
+    const timeWindow = 10000; // 10 seconds
+    const maxActions = 5;
+
+    if (now - lastActionTime > timeWindow) {
+      setLastActionTime(now);
+      setActionCount(1);
+      setIsRateLimited(false);
+      return true;
+    }
+
+    if (actionCount >= maxActions) {
+      setIsRateLimited(true);
+      toast.error('Слишком много запросов. Пожалуйста, подождите.');
+      return false;
+    }
+
+    setActionCount(prev => prev + 1);
+    return true;
+  };
+
   const createRoom = async () => {
+    if (!checkRateLimit()) return;
     const trimmedName = playerName.trim();
     if (!trimmedName) return toast.error('Введите ваше имя');
     setIsConnecting(true);
@@ -1002,6 +1220,7 @@ export default function App() {
   };
 
   const joinRoom = async (overrideId?: string | React.MouseEvent, overrideName?: string) => {
+    if (!checkRateLimit()) return;
     const id = typeof overrideId === 'string' ? overrideId : roomId;
     const name = typeof overrideName === 'string' ? overrideName : playerName;
     
@@ -1423,137 +1642,21 @@ export default function App() {
     }
   }, [room, isPreviewing]);
 
-  const THEMES: Record<string, any> = {
-    default: {
-      bg: 'bg-zinc-950',
-      header: 'bg-black/40',
-      card: 'bg-black/40',
-      accent: 'text-orange-500',
-      accentBg: 'bg-orange-600',
-      border: 'border-white/5',
-      text: 'text-white',
-      muted: 'text-zinc-500',
-      overlay: 'bg-indigo-950/20'
-    },
-    sasavot: {
-      bg: 'bg-red-950',
-      header: 'bg-red-900/40',
-      card: 'bg-red-900/40',
-      accent: 'text-red-500',
-      accentBg: 'bg-red-700',
-      border: 'border-red-500/20',
-      text: 'text-red-50',
-      muted: 'text-red-400/60',
-      overlay: 'bg-red-950/40',
-      style: { fontFamily: 'serif' }
-    },
-    helin139: {
-      bg: 'bg-yellow-400',
-      header: 'bg-yellow-500/40',
-      card: 'bg-yellow-500/40',
-      accent: 'text-blue-600',
-      accentBg: 'bg-blue-600',
-      border: 'border-blue-500/20',
-      text: 'text-blue-900',
-      muted: 'text-blue-800/60',
-      overlay: 'bg-yellow-600/20'
-    },
-    rostikfacekid: {
-      bg: 'bg-[#0a0a0a]',
-      header: 'bg-[#1a1a1a]/40',
-      card: 'bg-[#1a1a1a]/40',
-      accent: 'text-[#00ffcc]',
-      accentBg: 'bg-[#00ffcc]',
-      border: 'border-[#00ffcc]/20',
-      text: 'text-[#eaeaea]',
-      muted: 'text-zinc-500',
-      overlay: 'bg-black/60',
-      glitch: true
-    },
-    iceicell: {
-      bg: 'bg-[#f2e6d8]',
-      header: 'bg-[#d89aa6]/20',
-      card: 'bg-white/40',
-      accent: 'text-[#7a3b4a]',
-      accentBg: 'bg-[#d89aa6]',
-      border: 'border-[#d89aa6]/40',
-      text: 'text-[#555]',
-      muted: 'text-[#7a3b4a]/60',
-      overlay: 'bg-[#d89aa6]/10',
-      glow: 'rgba(216, 154, 166, 0.2)'
-    },
-    formixyouknow: {
-      bg: 'bg-[#111]',
-      header: 'bg-black/40',
-      card: 'bg-zinc-900/40',
-      accent: 'text-[#ff7a00]',
-      accentBg: 'bg-[#ff7a00]',
-      border: 'border-[#ffd000]/20',
-      text: 'text-white',
-      muted: 'text-[#ffd000]/60',
-      overlay: 'bg-orange-950/20',
-      glow: 'rgba(255, 122, 0, 0.2)'
-    },
-    yurapivo: {
-      bg: 'bg-black',
-      header: 'bg-purple-900/20',
-      card: 'bg-purple-900/20',
-      accent: 'text-pink-500',
-      accentBg: 'bg-purple-600',
-      border: 'border-pink-500/20',
-      text: 'text-pink-50',
-      muted: 'text-purple-400',
-      overlay: 'bg-pink-950/20',
-      glow: 'rgba(236, 72, 153, 0.2)'
-    },
-    r4dom1r: {
-      bg: 'bg-zinc-900',
-      header: 'bg-black/60',
-      card: 'bg-black/40',
-      accent: 'text-zinc-400',
-      accentBg: 'bg-zinc-700',
-      border: 'border-white/10',
-      text: 'text-zinc-100',
-      muted: 'text-zinc-500',
-      overlay: 'bg-black/40',
-      glow: 'rgba(255, 255, 255, 0.1)'
-    },
-    tankzor: {
-      bg: 'bg-black',
-      header: 'bg-red-900/20',
-      card: 'bg-zinc-900/60',
-      accent: 'text-red-600',
-      accentBg: 'bg-red-700',
-      border: 'border-purple-500/20',
-      text: 'text-white',
-      muted: 'text-purple-400',
-      overlay: 'bg-red-950/40',
-      glow: 'rgba(220, 38, 38, 0.2)'
-    },
-    poisonika: {
-      bg: 'bg-white',
-      header: 'bg-zinc-100',
-      card: 'bg-zinc-50',
-      accent: 'text-[#7a3b4a]',
-      accentBg: 'bg-[#7a3b4a]',
-      border: 'border-[#7a3b4a]/20',
-      text: 'text-zinc-900',
-      muted: 'text-zinc-500',
-      overlay: 'bg-zinc-200/40',
-      handDrawn: true,
-      glow: 'rgba(122, 59, 74, 0.1)'
+  const theme = useMemo(() => {
+    if (selectedTheme === 'custom') {
+      return { ...THEMES_DATA.default, bgImage: customBgUrl };
     }
-  };
-
-  const theme = THEMES[selectedTheme] || THEMES.default;
+    return THEMES_DATA[selectedTheme] || THEMES_DATA.default;
+  }, [selectedTheme, customBgUrl]);
 
   if (userType === 'none') {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
-        <div className="max-w-md w-full space-y-8 text-center">
+      <div className={cn("min-h-screen flex items-center justify-center p-6 relative overflow-hidden transition-colors duration-1000", theme.bg, theme.text)}>
+        <BackgroundAtmosphere theme={theme} disabled={disableCustomBackground} />
+        <div className="max-w-md w-full space-y-8 text-center relative z-10">
           <div className="space-y-2">
-            <h1 className="text-4xl font-black italic uppercase tracking-tighter text-white">Кто ты?</h1>
-            <p className="text-zinc-500 font-medium">Выберите ваш тип пользователя</p>
+            <h1 className={cn("text-4xl font-black italic uppercase tracking-tighter", theme.text === 'text-white' ? 'text-white' : theme.text)}>Кто ты?</h1>
+            <p className={cn("font-medium opacity-50", theme.muted)}>Выберите ваш тип пользователя</p>
           </div>
           
           <div className="grid grid-cols-1 gap-4">
@@ -1561,22 +1664,22 @@ export default function App() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setUserType('regular')}
-              className="p-8 bg-zinc-900 border border-white/5 rounded-[2rem] hover:border-orange-500/50 transition-all group"
+              className={cn("p-8 border rounded-[2rem] transition-all group", theme.card, theme.border, "hover:border-orange-500/50")}
             >
               <User className="w-12 h-12 text-orange-500 mx-auto mb-4 group-hover:scale-110 transition-transform" />
-              <h3 className="text-xl font-bold text-white">Обычный человек</h3>
-              <p className="text-zinc-500 text-sm mt-2">Стандартный визуальный стиль</p>
+              <h3 className={cn("text-xl font-bold", theme.text)}>Обычный человек</h3>
+              <p className={cn("text-sm mt-2 opacity-50", theme.muted)}>Стандартный визуальный стиль</p>
             </motion.button>
 
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setUserType('streamer')}
-              className="p-8 bg-zinc-900 border border-white/5 rounded-[2rem] hover:border-purple-500/50 transition-all group"
+              className={cn("p-8 border rounded-[2rem] transition-all group", theme.card, theme.border, "hover:border-purple-500/50")}
             >
               <Users className="w-12 h-12 text-purple-500 mx-auto mb-4 group-hover:scale-110 transition-transform" />
-              <h3 className="text-xl font-bold text-white">Стример</h3>
-              <p className="text-zinc-500 text-sm mt-2">Персонализированные темы</p>
+              <h3 className={cn("text-xl font-bold", theme.text)}>Стример</h3>
+              <p className={cn("text-sm mt-2 opacity-50", theme.muted)}>Персонализированные темы</p>
             </motion.button>
           </div>
         </div>
@@ -1598,11 +1701,12 @@ export default function App() {
     ];
 
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
-        <div className="max-w-4xl w-full space-y-8 text-center">
+      <div className={cn("min-h-screen flex items-center justify-center p-6 relative overflow-hidden transition-colors duration-1000", theme.bg, theme.text)}>
+        <BackgroundAtmosphere theme={theme} disabled={disableCustomBackground} />
+        <div className="max-w-4xl w-full space-y-8 text-center relative z-10">
           <div className="space-y-2">
-            <h1 className="text-4xl font-black italic uppercase tracking-tighter text-white">Выбери свой стиль</h1>
-            <p className="text-zinc-500 font-medium">Выберите стримера для применения темы</p>
+            <h1 className={cn("text-4xl font-black italic uppercase tracking-tighter", theme.text === 'text-white' ? 'text-white' : theme.text)}>Выбери свой стиль</h1>
+            <p className={cn("font-medium opacity-50", theme.muted)}>Выберите стримера или создайте свой стиль</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1612,17 +1716,57 @@ export default function App() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setSelectedTheme(s.id)}
-                className="p-6 bg-zinc-900 border border-white/5 rounded-3xl hover:border-white/20 transition-all text-left"
+                className={cn("p-6 border rounded-3xl transition-all text-left group", theme.card, theme.border, "hover:border-white/20")}
               >
-                <h3 className="text-lg font-bold text-white">{s.name}</h3>
-                <p className="text-zinc-500 text-xs mt-1">{s.desc}</p>
+                <h3 className={cn("text-lg font-bold", theme.text)}>{s.name}</h3>
+                <p className={cn("text-xs mt-1 opacity-50", theme.muted)}>{s.desc}</p>
               </motion.button>
             ))}
+
+            {/* Custom Theme Option */}
+            <div className={cn("p-6 border rounded-3xl space-y-6 text-left md:col-span-3", theme.card, theme.border)}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className={cn("text-lg font-bold", theme.text)}>Свой стиль</h3>
+                  <p className={cn("text-xs mt-1 opacity-50", theme.muted)}>Вставьте ссылку на изображение или GIF для фона</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={() => {
+                      const newValue = !disableCustomBackground;
+                      setDisableCustomBackground(newValue);
+                      localStorage.setItem('mafia_disable_bg', String(newValue));
+                    }}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-xl border transition-all text-[10px] font-black uppercase tracking-widest",
+                      disableCustomBackground ? "bg-red-600 border-red-500 text-white" : cn(theme.card, theme.border, theme.muted)
+                    )}
+                  >
+                    {disableCustomBackground ? 'Фон выключен' : 'Выключить фон'}
+                  </button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setSelectedTheme('custom')}
+                    className={cn("px-6 py-2 text-white rounded-xl font-bold text-sm uppercase tracking-widest", theme.accentBg)}
+                  >
+                    Применить
+                  </motion.button>
+                </div>
+              </div>
+              <input 
+                type="text"
+                value={customBgUrl}
+                onChange={(e) => setCustomBgUrl(e.target.value)}
+                placeholder="https://example.com/image.gif"
+                className={cn("w-full bg-black/40 border rounded-xl px-4 py-3 text-sm focus:outline-none transition-colors", theme.border, "focus:border-orange-500/50", theme.text)}
+              />
+            </div>
           </div>
           
           <button 
             onClick={() => setUserType('none')}
-            className="text-zinc-500 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest"
+            className={cn("transition-colors text-sm font-bold uppercase tracking-widest", theme.muted, "hover:text-white")}
           >
             ← Назад
           </button>
@@ -1636,28 +1780,8 @@ export default function App() {
       <div className={cn("min-h-screen flex items-center justify-center p-4 font-sans overflow-hidden relative selection:bg-orange-500/30 transition-colors duration-1000", theme.bg, theme.text)}>
         <Toaster position="top-center" theme={selectedTheme === 'poisonika' || selectedTheme === 'iceicell' ? 'light' : 'dark'} richColors />
         
-        {/* Background Atmosphere - Recipe 7 */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className={cn("absolute top-[-10%] left-[-10%] w-[80%] h-[80%] blur-[180px] rounded-full animate-pulse opacity-20", theme.accentBg)} />
-          <div className={cn("absolute bottom-[-10%] right-[-10%] w-[80%] h-[80%] blur-[180px] rounded-full animate-pulse opacity-20", theme.accentBg)} style={{ animationDelay: '3s' }} />
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.05] mix-blend-overlay" />
-          
-          {/* Floating Particles */}
-          {[...Array(20)].map((_, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: Math.random() * 1000 }}
-              animate={{ 
-                opacity: [0, 0.5, 0], 
-                y: [Math.random() * 1000, Math.random() * 1000 - 500],
-                x: [Math.random() * 1000, Math.random() * 1000 + 100]
-              }}
-              transition={{ duration: 10 + Math.random() * 20, repeat: Infinity, ease: "linear" }}
-              className="absolute w-1 h-1 bg-white/20 rounded-full"
-            />
-          ))}
-        </div>
-
+        <BackgroundAtmosphere theme={theme} disabled={disableCustomBackground} />
+        
         <motion.div 
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1700,17 +1824,31 @@ export default function App() {
                 <p className={cn("text-xl max-w-lg font-medium leading-relaxed", theme.muted)}>
                   Разоблачите предателей, скрывающихся за анимированными говорящими фруктами. Игра на выживание, где на кону доверие и хитрость.
                 </p>
-                <button 
-                  onClick={() => {
-                    setUserType('none');
-                    setSelectedTheme('default');
-                    localStorage.removeItem('mafia_user_type');
-                    localStorage.removeItem('mafia_theme');
-                  }}
-                  className={cn("px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", theme.card, theme.border, theme.muted, "hover:text-white")}
-                >
-                  Сменить тему
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button 
+                    onClick={() => {
+                      setUserType('none');
+                      setSelectedTheme('default');
+                      localStorage.removeItem('mafia_user_type');
+                      localStorage.removeItem('mafia_theme');
+                    }}
+                    className={cn("px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", theme.card, theme.border, theme.muted, "hover:text-white")}
+                  >
+                    Сменить тему
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const newValue = !disableCustomBackground;
+                      setDisableCustomBackground(newValue);
+                      localStorage.setItem('mafia_disable_bg', String(newValue));
+                    }}
+                    className={cn("px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all", 
+                      disableCustomBackground ? "bg-red-600 border-red-500 text-white" : cn(theme.card, theme.border, theme.muted, "hover:text-white")
+                    )}
+                  >
+                    {disableCustomBackground ? 'Включить фон' : 'Выключить фон'}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1810,6 +1948,7 @@ export default function App() {
                       <input
                         type="text"
                         placeholder="ВВЕДИТЕ ВАШЕ ИМЯ"
+                        maxLength={20}
                         className={cn("w-full bg-black/60 border rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:ring-4 transition-all text-base font-black tracking-[0.2em] uppercase placeholder:opacity-20", theme.border, theme.text)}
                         value={playerName}
                         onChange={(e) => setPlayerName(e.target.value)}
@@ -1883,6 +2022,7 @@ export default function App() {
                       <input
                         type="text"
                         placeholder="6-ЗНАЧНЫЙ КОД"
+                        maxLength={10}
                         className={cn("w-full bg-black/60 border rounded-[2rem] py-8 pl-20 pr-8 focus:outline-none focus:ring-4 transition-all text-2xl font-black tracking-[0.4em] uppercase placeholder:opacity-20 text-center font-mono", theme.border, theme.text)}
                         value={roomId}
                         onChange={(e) => setRoomId(e.target.value.toUpperCase())}
@@ -2035,26 +2175,9 @@ export default function App() {
       theme.glitch && "glitch-container",
       theme.handDrawn && "hand-drawn-container"
     )} style={theme.style}>
-      <Toaster position="top-center" theme={selectedTheme === 'poisonika' ? 'light' : 'dark'} richColors />
+      <Toaster position="top-center" theme={selectedTheme === 'poisonika' || selectedTheme === 'iceicell' ? 'light' : 'dark'} richColors />
       
-      {/* Dynamic Background Atmosphere */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <motion.div 
-          animate={{ 
-            scale: room.phase === 'night' ? 1.2 : 1,
-            opacity: room.phase === 'night' ? 0.15 : 0.05
-          }}
-          className={cn("absolute top-[-10%] left-[-10%] w-[80%] h-[80%] blur-[180px] rounded-full", theme.accentBg)} 
-        />
-        <motion.div 
-          animate={{ 
-            scale: room.phase === 'night' ? 1.5 : 1,
-            opacity: room.phase === 'night' ? 0.2 : 0.05
-          }}
-          className="absolute bottom-[-10%] right-[-10%] w-[80%] h-[80%] bg-indigo-600 blur-[180px] rounded-full" 
-        />
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] mix-blend-overlay" />
-      </div>
+      <BackgroundAtmosphere theme={theme} phase={room.phase} disabled={disableCustomBackground} />
 
       <AnimatePresence>
         {(room.phase === 'night' || room.phase === 'day_results' || room.phase === 'voting' || room.phase === 'game_over') && (
@@ -2161,7 +2284,9 @@ export default function App() {
             >
               <div className="flex flex-col items-start">
                 <span className={cn("text-[8px] font-black tracking-widest uppercase", theme.muted)}>Код комнаты</span>
-                <span className="text-sm font-mono font-black">{room.id}</span>
+                <span className="text-sm font-mono font-black">
+                  {room.id}
+                </span>
               </div>
               <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
                 {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className={cn("w-4 h-4 group-hover:text-white", theme.muted)} />}
@@ -2369,6 +2494,39 @@ export default function App() {
                   >
                     Начать игру
                   </motion.button>
+                </div>
+              )}
+
+              {room.status === 'playing' && me && (
+                <div className={cn("p-8 rounded-[2rem] border space-y-4", theme.card, theme.border)}>
+                  <div className="flex items-center justify-between">
+                    <p className={cn("text-[10px] font-black uppercase tracking-widest", theme.muted)}>Ваша роль</p>
+                  </div>
+                  <div className={cn(
+                    "p-4 rounded-xl border flex items-center gap-4 transition-all duration-500",
+                    me.role === 'mafia' ? "border-red-500/20 bg-red-500/5" :
+                    me.role === 'doctor' ? "border-green-500/20 bg-green-500/5" :
+                    me.role === 'detective' ? "border-blue-500/20 bg-blue-500/5" :
+                    "border-zinc-500/20 bg-zinc-500/5"
+                  )}>
+                    <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center", 
+                      me.role === 'mafia' ? "bg-red-500/20 text-red-500" :
+                      me.role === 'doctor' ? "bg-green-500/20 text-green-500" :
+                      me.role === 'detective' ? "bg-blue-500/20 text-blue-500" :
+                      "bg-zinc-500/20 text-zinc-500"
+                    )}>
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    <span className={cn(
+                      "text-xl font-black uppercase italic tracking-tighter",
+                      me.role === 'mafia' ? "text-red-500" :
+                      me.role === 'doctor' ? "text-green-500" :
+                      me.role === 'detective' ? "text-blue-500" :
+                      "text-zinc-500"
+                    )}>
+                      {ROLE_NAMES[me.role]}
+                    </span>
+                  </div>
                 </div>
               )}
 
